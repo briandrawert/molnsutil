@@ -6,73 +6,74 @@ from boto.s3.connection import S3Connection
 logging.basicConfig(filename="boto.log", level=logging.DEBUG)
 from boto.s3.key import Key
 import uuid
-import pickle
+import dill as pickle
 import json
 
 class PersistentStorage():
 
     def __init__(self, bucket_name=None):
        	fh = open('.molns/s3.json','r')
-	s3config = json.load(fh)
-	self.s3 = S3Connection(is_secure=False,
-           		      port=8888,
-                              host=s3config['HOST'],
-                              aws_access_key_id=s3config['EC2_ACCESS_KEY'],
-                              aws_secret_access_key=s3config['EC2_SECRET_KEY'],
-                              calling_format='boto.s3.connection.OrdinaryCallingFormat'
-                            )
+        s3config = json.load(fh)
+        self.s3 = S3Connection(is_secure=False,
+                               port=8888,
+                               host=s3config['HOST'],
+                               aws_access_key_id=s3config['EC2_ACCESS_KEY'],
+                               aws_secret_access_key=s3config['EC2_SECRET_KEY'],
+                               calling_format='boto.s3.connection.OrdinaryCallingFormat'
+                               )
+                           
 
         self.bucket_name = bucket_name
-	if self.bucket_name is None:
+        if self.bucket_name is None:
            # try reading it from the config file
-	   try:
-	       self.bucket_name = s3config['BUCKET_NAME']
-           except:
-	       pass	
-	self.set_bucket(self.bucket_name) 	
+        try:
+            self.bucket_name = s3config['BUCKET_NAME']
+        except:
+            pass
+        self.set_bucket(self.bucket_name)
 	
     def list_buckets(self):
-	all_buckets=self.s3.get_all_buckets()
-	buckets = []
-	for bucket in all_buckets:
-	   buckets.append(bucket.name)  		 
-	return buckets
+        all_buckets=self.s3.get_all_buckets()
+        buckets = []
+        for bucket in all_buckets:
+            buckets.append(bucket.name)
+        return buckets
 
     def set_bucket(self,bucket_name=None):
-	if not bucket_name:
-	    bucket = self.s3.create_bucket("molns_bucket_{0}".format(str(uuid.uuid1())))
-	else:
-	    try:
-		bucket = self.s3.get_bucket(bucket_name)
-	    except:
-		try:
-		   bucket = self.s3.create_bucket(bucket_name)
-		except Error, e:
-		   raise 
-	self.bucket = bucket
+        if not bucket_name:
+            bucket = self.s3.create_bucket("molns_bucket_{0}".format(str(uuid.uuid1())))
+        else:
+            try:
+                bucket = self.s3.get_bucket(bucket_name)
+            except:
+                try:
+                    bucket = self.s3.create_bucket(bucket_name)
+                except Exception, e:
+                    raise
+        self.bucket = bucket
 
     def put(self, name, data):
-	k = Key(self.bucket)
-	k.key = name
-	k.set_contents_from_string(pickle.dumps(data))
+        k = Key(self.bucket)
+        k.key = name
+        k.set_contents_from_string(pickle.dumps(data))
 
 
     def get(self, name):
         k = Key(self.bucket)
-	k.key = name
-	try:
-	    obj = pickle.loads(k.get_contents_as_string())
+        k.key = name
+        try:
+            obj = pickle.loads(k.get_contents_as_string())
         except Exception, e:
-	    raise GlobalStoreException("Could not retrive object from the datastore."+str(e))
-	return obj    
+            raise GlobalStoreException("Could not retrive object from the datastore."+str(e))
+        return obj
 
     def delete(self, name):
-	k = Key(self.bucket)
-	k.key = name
-	self.bucket.delete_key(k)
+        k = Key(self.bucket)
+        k.key = name
+        self.bucket.delete_key(k)
 
     def delete_all(self):
-	for k in self.bucket.list():
+        for k in self.bucket.list():
             self.bucket.delete_key(k.key) 
 
 class GlobalStoreException(Exception):
