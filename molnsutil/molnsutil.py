@@ -25,11 +25,11 @@ class PersistentStorage():
 
         self.bucket_name = bucket_name
         if self.bucket_name is None:
-           # try reading it from the config file
-        try:
-            self.bucket_name = s3config['BUCKET_NAME']
-        except:
-            pass
+            # try reading it from the config file
+            try:
+                self.bucket_name = s3config['BUCKET_NAME']
+            except:
+                pass
         self.set_bucket(self.bucket_name)
 	
     def list_buckets(self):
