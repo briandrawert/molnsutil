@@ -78,7 +78,7 @@ class PersistentStorage():
                 raise GlobalStoreException("No bytes written to key.")
         except Exception, e:
             return {'status':'failed', 'error':str(e)}
-        return {'status':'success'}
+        return {'status':'success', 'num_bytes':num_bytes}
 
     def get(self, name, validate=False):
         k = Key(self.bucket,validate)
