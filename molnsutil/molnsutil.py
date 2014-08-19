@@ -6,8 +6,23 @@ from boto.s3.connection import S3Connection
 logging.basicConfig(filename="boto.log", level=logging.DEBUG)
 from boto.s3.key import Key
 import uuid
-import dill as pickle
+
+try:
+    import dill as pickle
+except:
+    import pickle
+
 import json
+
+""" 
+    s3.json is a JSON file that contains the follwing info:
+    
+    'HOST' : The hostname for the s3 API endpoint
+     EC2_ACCESS_KEY' : AWS access key
+     EC2_SECRET_KEY' : AWS private key
+    
+"""
+
 
 class PersistentStorage():
 
@@ -55,8 +70,11 @@ class PersistentStorage():
     def put(self, name, data):
         k = Key(self.bucket)
         k.key = name
-        k.set_contents_from_string(pickle.dumps(data))
-
+        try:
+            k.set_contents_from_string(pickle.dumps(data))
+        except Exception, e:
+            return {'status':'failed'}
+        return {'status':'sucess'}
 
     def get(self, name):
         k = Key(self.bucket)
