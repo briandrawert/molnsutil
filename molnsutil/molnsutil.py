@@ -69,19 +69,23 @@ class PersistentStorage():
 
     def put(self, name, data):
         k = Key(self.bucket)
+        if not k:
+            raise GlobalStoreException("Could not obtain key in the global store. ")
         k.key = name
         try:
-            k.set_contents_from_string(pickle.dumps(data))
+            num_bytes = k.set_contents_from_string(pickle.dumps(data))
+            if num_bytes == 0:
+                raise GlobalStoreException("No bytes written to key.")
         except Exception, e:
-            return {'status':'failed'}
-        return {'status':'sucess'}
+            return {'status':'failed', 'error':str(e)}
+        return {'status':'success'}
 
-    def get(self, name):
-        k = Key(self.bucket)
+    def get(self, name, validate=False):
+        k = Key(self.bucket,validate)
         k.key = name
         try:
             obj = pickle.loads(k.get_contents_as_string())
-        except Exception, e:
+        except boto.exception.S3ResponseError, e:
             raise GlobalStoreException("Could not retrive object from the datastore."+str(e))
         return obj
 
