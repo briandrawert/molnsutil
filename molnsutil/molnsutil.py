@@ -22,19 +22,22 @@ import json
      EC2_SECRET_KEY' : AWS private key
     
 """
+import os
+fh = open(os.environ['HOME']+'/.molns/s3.json','r')
+s3config = json.loads(fh.read())
 
 
 class PersistentStorage():
 
     def __init__(self, bucket_name=None):
-       	fh = open('.molns/s3.json','r')
-        s3config = json.load(fh)
-        self.s3 = S3Connection(is_secure=False,
-                               port=8888,
-                               host=s3config['HOST'],
-                               aws_access_key_id=s3config['EC2_ACCESS_KEY'],
-                               aws_secret_access_key=s3config['EC2_SECRET_KEY'],
-                               calling_format='boto.s3.connection.OrdinaryCallingFormat'
+        
+        self.s3 = S3Connection(#is_secure=False,
+                               #port=8888,
+                               #host=s3config['HOST'],
+                               aws_access_key_id=s3config['aws_access_key_id'],
+                               aws_secret_access_key=s3config['aws_secret_access_key'],
+                               calling_format='boto.s3.connection.OrdinaryCallingFormat',
+                               #**s3config
                                )
                            
 
@@ -42,7 +45,7 @@ class PersistentStorage():
         if self.bucket_name is None:
             # try reading it from the config file
             try:
-                self.bucket_name = s3config['BUCKET_NAME']
+                self.bucket_name = s3config['bucket_name']
             except:
                 pass
         self.set_bucket(self.bucket_name)
