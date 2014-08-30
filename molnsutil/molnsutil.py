@@ -81,18 +81,19 @@ class PersistentStorage():
                 try:
                     bucket = self.s3.create_bucket(bucket_name)
                 except Exception, e:
-                    raise
+                    raise PersistentStorageException("Failed to create/set bucket in the object store."+str(e))
+                        
         self.bucket = bucket
 
     def put(self, name, data):
         k = Key(self.bucket)
         if not k:
-            raise GlobalStoreException("Could not obtain key in the global store. ")
+            raise PersistentStorageException("Could not obtain key in the global store. ")
         k.key = name
         try:
             num_bytes = k.set_contents_from_string(pickle.dumps(data))
             if num_bytes == 0:
-                raise GlobalStoreException("No bytes written to key.")
+                raise PersistentStorageException("No bytes written to key.")
         except Exception, e:
             return {'status':'failed', 'error':str(e)}
         return {'status':'success', 'num_bytes':num_bytes}
@@ -103,7 +104,7 @@ class PersistentStorage():
         try:
             obj = pickle.loads(k.get_contents_as_string())
         except boto.exception.S3ResponseError, e:
-            raise GlobalStoreException("Could not retrive object from the datastore."+str(e))
+            raise PersistentStorageException("Could not retrive object from the datastore."+str(e))
         return obj
 
     def delete(self, name):
@@ -115,7 +116,44 @@ class PersistentStorage():
         for k in self.bucket.list():
             self.bucket.delete_key(k.key) 
 
-class GlobalStoreException(Exception):
+
+
+class DistributedEnsemble():
+    """ A distributed ensemble based on a pyurdme model. """
+
+    def __init__(self, model=None, number_of_realizations=1, persistent=False):
+        """ """
+        self.model = model
+        self.number_of_realizations = number_of_realizations
+        self.persistent = persistent
+    
+    def set_model(model):
+        self.model = model
+
+    def add_realizations(self, number_of_realizations=1):
+        """ Add a number of realizations to the ensemble. """
+
+    def mean(self, g=None, number_of_realizations=None):
+        """ Compute the mean of the function g(X) based on number_of_realizations realizations
+            in the ensemble. """
+        
+        mean_value = self.moment(function_handle, number_of_realizations=number_of_realizations)
+
+    def variance(self, g=None, number_of_realizations=None):
+        """ Compute the variance (second order central moment) of the function g(X) based on number_of_realizations realizations
+            in the ensemble. """
+
+    def moment(self, g=None, order=1, number_of_realizations=None):
+        """ Compute the moment of order 'order' of g(X), using number_of_realizations
+            realizations in the ensemble. """
+
+    def density(self, g=None, number_of_realizations=None):
+        """ Estimate the probability density function of g(X) based on number_of_realizations realizations
+            in the ensemble. """
+
+
+
+class PersitentStorageException(Exception):
     pass
 	
 
