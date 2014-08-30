@@ -3,9 +3,14 @@
   
   molnsutil contains implementations of a persisitent storage API for 
   staging objects to an Object Store in the clouds supported by MOLNs^2. 
-  
-  It also contains implementations of common Monte Carlo computational
-  workflows using IPython Parallel.
+  This can be used in MOLNs^2 to write variables that are presistent
+  between sessions, provides a convenetient way to get data out of the
+  system, and it also provides a means during parallel computations to 
+  stage data so that it is visible to all compute engines, in contrast
+  to using the local scratch space on the engines.
+
+  molnsutilalso contains parallel implementations of common Monte Carlo computational
+  workflows, such as the generaion of ensembles and esitmation of moments.
   
 """
 
@@ -40,7 +45,6 @@ class PersistentStorage():
     """
        Provides an abstaction for interacting with the Object Stores
        of the supported clouds.
-       
     """
 
     def __init__(self, bucket_name=None):
@@ -158,7 +162,7 @@ class PersitentStorageException(Exception):
 	
 
 if __name__ == '__main__':
-
+    
     ga = PersistentStorage('myglobalarea')
     print ga.list_buckets()
     ga.put('testtest.pyb',"fdkjshfkjdshfjdhsfkjhsdkjfhdskjf")
