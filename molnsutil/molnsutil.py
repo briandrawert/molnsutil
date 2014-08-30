@@ -33,8 +33,9 @@ import json
 
 #     s3.json is a JSON file that contains the follwing info:
 #
-#     EC2_ACCESS_KEY' : AWS access key
-#     EC2_SECRET_KEY' : AWS private key
+#     'aws_access_key_id' : AWS access key
+#     'aws_secret_access_key' : AWS private key
+#   s3.json needs to be created and put in .molns/s3.json in the root of the home directory. 
 
 import os
 fh = open(os.environ['HOME']+'/.molns/s3.json','r')
