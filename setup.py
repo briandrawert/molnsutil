@@ -1,5 +1,5 @@
 from setuptools import setup
 
 setup(name='molnsutil', 
-      version="1.0.0",
+      version="0.0.1",
       packages=['molnsutil'])

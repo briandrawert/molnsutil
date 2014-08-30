@@ -1,3 +1,15 @@
+""" 
+  Utility module for MOLNs^2. 
+  
+  molnsutil contains implementations of a persisitent storage API for 
+  staging objects to an Object Store in the clouds supported by MOLNs^2. 
+  
+  It also contains implementations of common Monte Carlo computational
+  workflows using IPython Parallel.
+  
+"""
+
+
 import boto
 import boto.ec2
 from os import environ
@@ -14,20 +26,22 @@ except:
 
 import json
 
-""" 
-    s3.json is a JSON file that contains the follwing info:
-    
-    'HOST' : The hostname for the s3 API endpoint
-     EC2_ACCESS_KEY' : AWS access key
-     EC2_SECRET_KEY' : AWS private key
-    
-"""
+#     s3.json is a JSON file that contains the follwing info:
+#
+#     EC2_ACCESS_KEY' : AWS access key
+#     EC2_SECRET_KEY' : AWS private key
+
 import os
 fh = open(os.environ['HOME']+'/.molns/s3.json','r')
 s3config = json.loads(fh.read())
 
 
 class PersistentStorage():
+    """
+       Provides an abstaction for interacting with the Object Stores
+       of the supported clouds.
+       
+    """
 
     def __init__(self, bucket_name=None):
         
