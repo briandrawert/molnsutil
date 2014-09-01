@@ -158,7 +158,7 @@ class DistributedEnsemble():
 
 
 
-class PersitentStorageException(Exception):
+class PersistentStorageException(Exception):
     pass
 	
 
