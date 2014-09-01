@@ -50,9 +50,9 @@ class PersistentStorage():
 
     def __init__(self, bucket_name=None):
         
-        self.s3 = S3Connection(#is_secure=False,
-                               #port=8888,
-                               #host=s3config['HOST'],
+        self.s3 = S3Connection(is_secure=False,
+                               port=8888,
+                               host=s3config['HOST'],
                                aws_access_key_id=s3config['aws_access_key_id'],
                                aws_secret_access_key=s3config['aws_secret_access_key'],
                                calling_format='boto.s3.connection.OrdinaryCallingFormat',
