@@ -42,6 +42,23 @@ fh = open(os.environ['HOME']+'/.molns/s3.json','r')
 s3config = json.loads(fh.read())
 
 
+class LocalStorage():
+
+    def __init__(self):
+	self.folder_name = "/home/ubuntu/localarea"
+	
+    def put(self, filename, data):
+	with open(self.folder_name+"/"+filename,'wb') as fh:
+             fh.write(pickle.dumps(data))
+
+    def get(self, filename):
+	with open(self.folder_name+"/"+filename, 'rb') as fh:
+	    data = pickle.load(fh)
+	return data
+
+    def delete(self,filename):
+	os.remove(self.folder_name+"/"+filename)
+
 class PersistentStorage():
     """
        Provides an abstaction for interacting with the Object Stores
@@ -116,6 +133,9 @@ class PersistentStorage():
         k = Key(self.bucket)
         k.key = name
         self.bucket.delete_key(k)
+
+    def list(self):
+	return self.bucket.list()
 
     def delete_all(self):
         for k in self.bucket.list():
