@@ -139,12 +139,7 @@ class S3Provider():
 
 class SwiftProvider():
     def __init__(self, bucket_name):
-        self.connection = swiftclient.client.Connection(authurl=env['OS_AUTH_URL'],
-                                                        user=env['OS_USERNAME'],
-                                                        key=env['OS_PASSWORD'],
-                                                        tenant_name=env['OS_TENANT_NAME'],
-                                                        auth_version=2.0
-                                                        )
+        self.connection = swiftclient.client.Connection(auth_version=2.0,**s3config['credentials'])
         self.set_bucket(bucket_name)
     
     def set_bucket(self,bucket_name):
