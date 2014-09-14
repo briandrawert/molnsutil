@@ -24,6 +24,9 @@ logging.basicConfig(filename="boto.log", level=logging.DEBUG)
 from boto.s3.key import Key
 import uuid
 
+import swiftclient.client
+
+
 try:
     import dill as pickle
 except:
@@ -41,71 +44,54 @@ import os
 fh = open(os.environ['HOME']+'/.molns/s3.json','r')
 s3config = json.loads(fh.read())
 
+env = os.environ
 
 class LocalStorage():
-
+    """ This class provides an abstraction for storing and reading objects on/from
+        the ephemeral storage. """
+    
     def __init__(self):
 	self.folder_name = "/home/ubuntu/localarea"
 	
     def put(self, filename, data):
-	with open(self.folder_name+"/"+filename,'wb') as fh:
-             fh.write(pickle.dumps(data))
+        with open(self.folder_name+"/"+filename,'wb') as fh:
+            fh.write(pickle.dumps(data))
 
     def get(self, filename):
-	with open(self.folder_name+"/"+filename, 'rb') as fh:
-	    data = pickle.load(fh)
-	return data
+        with open(self.folder_name+"/"+filename, 'rb') as fh:
+            data = pickle.load(fh)
+        return data
 
     def delete(self,filename):
-	os.remove(self.folder_name+"/"+filename)
+        os.remove(self.folder_name+"/"+filename)
 
-class PersistentStorage():
-    """
-       Provides an abstaction for interacting with the Object Stores
-       of the supported clouds.
-    """
 
-    def __init__(self, bucket_name=None):
-        
-        self.s3 = S3Connection(is_secure=False,
-                               port=8888,
-                               host=s3config['HOST'],
-                               aws_access_key_id=s3config['aws_access_key_id'],
-                               aws_secret_access_key=s3config['aws_secret_access_key'],
-                               calling_format='boto.s3.connection.OrdinaryCallingFormat',
-                               #**s3config
-                               )
-                           
-
-        self.bucket_name = bucket_name
-        if self.bucket_name is None:
-            # try reading it from the config file
-            try:
-                self.bucket_name = s3config['bucket_name']
-            except:
-                pass
-        self.set_bucket(self.bucket_name)
-	
-    def list_buckets(self):
-        all_buckets=self.s3.get_all_buckets()
-        buckets = []
-        for bucket in all_buckets:
-            buckets.append(bucket.name)
-        return buckets
-
+class S3Provider():
+    def __init__(self, bucket_name):
+        self.connection = S3Connection(is_secure=False,
+                                 calling_format='boto.s3.connection.OrdinaryCallingFormat',
+                                 **s3config['credentials']
+                                 )
+        self.set_bucket(bucket_name)
+    
     def set_bucket(self,bucket_name=None):
         if not bucket_name:
-            bucket = self.s3.create_bucket("molns_bucket_{0}".format(str(uuid.uuid1())))
+            self.bucket_name = "molns_bucket_{0}".format(str(uuid.uuid1()))
+            bucket = self.provider.create_bucket(self.bucket_name)
         else:
+            self.bucket_name = bucket_name
             try:
-                bucket = self.s3.get_bucket(bucket_name)
+                bucket = self.connection.get_bucket(bucket_name)
             except:
                 try:
-                    bucket = self.s3.create_bucket(bucket_name)
+                    bucket = self.provider.create_bucket(bucket_name)
                 except Exception, e:
                     raise PersistentStorageException("Failed to create/set bucket in the object store."+str(e))
-                        
-        self.bucket = bucket
+        
+            self.bucket = bucket
+
+    def create_bucket(self,bucket_name):
+        return self.connection.create_bucket(bucket_name)
 
     def put(self, name, data):
         k = Key(self.bucket)
@@ -113,7 +99,7 @@ class PersistentStorage():
             raise PersistentStorageException("Could not obtain key in the global store. ")
         k.key = name
         try:
-            num_bytes = k.set_contents_from_string(pickle.dumps(data))
+            num_bytes = k.set_contents_from_string(data)
             if num_bytes == 0:
                 raise PersistentStorageException("No bytes written to key.")
         except Exception, e:
@@ -124,22 +110,151 @@ class PersistentStorage():
         k = Key(self.bucket,validate)
         k.key = name
         try:
-            obj = pickle.loads(k.get_contents_as_string())
+            obj = k.get_contents_as_string()
         except boto.exception.S3ResponseError, e:
             raise PersistentStorageException("Could not retrive object from the datastore."+str(e))
         return obj
 
     def delete(self, name):
+        """ Delete an object. """
         k = Key(self.bucket)
         k.key = name
         self.bucket.delete_key(k)
 
-    def list(self):
-	return self.bucket.list()
 
     def delete_all(self):
+        """ Delete all objects in the global storage area. """
         for k in self.bucket.list():
-            self.bucket.delete_key(k.key) 
+            self.bucket.delete_key(k.key)
+
+    def list(self):
+        """ List all containers. """
+        return self.bucket.list()
+
+
+
+
+
+
+
+class SwiftProvider():
+    def __init__(self, bucket_name):
+        self.connection = swiftclient.client.Connection(authurl=env['OS_AUTH_URL'],
+                                                        user=env['OS_USERNAME'],
+                                                        key=env['OS_PASSWORD'],
+                                                        tenant_name=env['OS_TENANT_NAME'],
+                                                        auth_version=2.0
+                                                        )
+        self.set_bucket(bucket_name)
+    
+    def set_bucket(self,bucket_name):
+        self.bucket_name = bucket_name
+        if not bucket_name:
+            self.bucket_name = "molns_bucket_{0}".format(str(uuid.uuid1()))
+            bucket = self.provider.create_bucket(self.bucket_name)
+        else:
+            self.bucket_name = bucket_name
+            try:
+                bucket = self.connection.get_bucket(bucket_name)
+            except:
+                try:
+                    bucket = self.create_bucket(bucket_name)
+                except Exception, e:
+                    raise PersistentStorageException("Failed to create/set bucket in the object store."+str(e))
+            
+            self.bucket = bucket
+
+
+    def create_bucket(self, bucket_name):
+        bucket = self.connection.put_container(bucket_name)
+        return bucket
+
+    def get_all_buckets(self):
+        """ List all bucket in this provider. """
+
+    def put(self, object_name, data):
+        self.connection.put_object(self.bucket_name, object_name, data)
+
+    def get(self, object_name, validate=False):
+        (response, obj) = self.connection.get_object(self.bucket_name, object_name)
+        return obj
+
+    def delete(self, object_name):
+        self.connection.delete_object(self.bucket_name, object_name)
+
+    def delete_all(self):
+        print self.connection.head_container(self.bucket_name)
+
+    def list(self):
+        """ TODO: implement. """
+#print self.connection.get_container()
+
+
+
+class PersistentStorage():
+    """
+       Provides an abstaction for interacting with the Object Stores
+       of the supported clouds.
+    """
+
+    def __init__(self, bucket_name=None):
+        #print s3config['credentials']
+        
+        if bucket_name is None:
+            # try reading it from the config file
+            try:
+                bucket_name = s3config['bucket_name']
+            except:
+                pass
+    
+        if s3config['provider_type'] == 'EC2':
+            self.provider = S3Provider(bucket_name)
+        # self.provider = S3Provider()
+        elif s3config['provider_type'] == 'OpenStack':
+            self.provider = SwiftProvider(bucket_name)
+        else:
+            raise PersistentStorageException("Unknown provider type.")
+        
+
+    def list_buckets(self):
+        all_buckets=self.provider.get_all_buckets()
+        buckets = []
+        for bucket in all_buckets:
+            buckets.append(bucket.name)
+        return buckets
+
+    def set_bucket(self,bucket_name=None):
+        if not bucket_name:
+            bucket = self.provider.create_bucket("molns_bucket_{0}".format(str(uuid.uuid1())))
+        else:
+            try:
+                bucket = self.provider.get_bucket(bucket_name)
+            except:
+                try:
+                    bucket = self.provider.create_bucket(bucket_name)
+                except Exception, e:
+                    raise PersistentStorageException("Failed to create/set bucket in the object store."+str(e))
+                        
+        self.bucket = bucket
+
+    def put(self, name, data):
+        self.provider.put(name, pickle.dumps(data))
+    
+    
+    def get(self, name, validate=False):
+        return pickle.loads(self.provider.get(name, validate))
+    
+    def delete(self, name):
+        """ Delete an object. """
+        self.provider.delete(name)
+    
+    def list(self):
+        """ List all containers. """
+        return self.provider.list()
+
+    def delete_all(self):
+        """ Delete all objects in the global storage area. """
+        self.provider.delete_all()
 
 
 
@@ -184,11 +299,12 @@ class PersistentStorageException(Exception):
 
 if __name__ == '__main__':
     
-    ga = PersistentStorage('myglobalarea')
-    print ga.list_buckets()
+    ga = PersistentStorage()
+    #print ga.list_buckets()
     ga.put('testtest.pyb',"fdkjshfkjdshfjdhsfkjhsdkjfhdskjf")
     print ga.get('testtest.pyb') 
     ga.delete('testtest.pyb')
+    ga.list()
     ga.put('file1', "fdlsfjdkls")
     ga.put('file2', "fdlsfjdkls")
     ga.put('file2', "fdlsfjdkls")
