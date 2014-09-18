@@ -182,8 +182,10 @@ class SwiftProvider():
 
     def list(self):
         """ TODO: implement. """
-#print self.connection.get_container()
 
+    def close(self):
+        self.connection.close()
+#print self.connection.get_container()
 
 
 class PersistentStorage():
@@ -250,7 +252,6 @@ class PersistentStorage():
     def delete_all(self):
         """ Delete all objects in the global storage area. """
         self.provider.delete_all()
-
 
 
 class DistributedEnsemble():
