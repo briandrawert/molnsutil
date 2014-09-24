@@ -9,7 +9,7 @@
   stage data so that it is visible to all compute engines, in contrast
   to using the local scratch space on the engines.
 
-  molnsutilalso contains parallel implementations of common Monte Carlo computational
+  molnsutil also contains parallel implementations of common Monte Carlo computational
   workflows, such as the generaion of ensembles and esitmation of moments.
   
 """
@@ -26,6 +26,9 @@ import uuid
 
 import swiftclient.client
 
+class MolnsUtilStorageException(Exception):
+    pass
+
 
 try:
     import dill as pickle
@@ -41,10 +44,9 @@ import json
 #   s3.json needs to be created and put in .molns/s3.json in the root of the home directory. 
 
 import os
-fh = open(os.environ['HOME']+'/.molns/s3.json','r')
-s3config = json.loads(fh.read())
+with open(os.environ['HOME']+'/.molns/s3.json','r') as fh:
+    s3config = json.loads(fh.read())
 
-env = os.environ
 
 class LocalStorage():
     """ This class provides an abstraction for storing and reading objects on/from
@@ -52,6 +54,25 @@ class LocalStorage():
     
     def __init__(self):
 	self.folder_name = "/home/ubuntu/localarea"
+	
+    def put(self, filename, data):
+        with open(self.folder_name+"/"+filename,'wb') as fh:
+            fh.write(pickle.dumps(data))
+
+    def get(self, filename):
+        with open(self.folder_name+"/"+filename, 'rb') as fh:
+            data = pickle.load(fh)
+        return data
+
+    def delete(self,filename):
+        os.remove(self.folder_name+"/"+filename)
+
+class SharedStorage():
+    """ This class provides an abstraction for storing and reading objects on/from
+        the sshfs mounted storage on the controller. """
+    
+    def __init__(self):
+	self.folder_name = "/home/ubuntu/shared"
 	
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
@@ -86,7 +107,7 @@ class S3Provider():
                 try:
                     bucket = self.provider.create_bucket(bucket_name)
                 except Exception, e:
-                    raise PersistentStorageException("Failed to create/set bucket in the object store."+str(e))
+                    raise MolnsUtilStorageException("Failed to create/set bucket in the object store."+str(e))
         
             self.bucket = bucket
 
@@ -96,12 +117,12 @@ class S3Provider():
     def put(self, name, data):
         k = Key(self.bucket)
         if not k:
-            raise PersistentStorageException("Could not obtain key in the global store. ")
+            raise MolnsUtilStorageException("Could not obtain key in the global store. ")
         k.key = name
         try:
             num_bytes = k.set_contents_from_string(data)
             if num_bytes == 0:
-                raise PersistentStorageException("No bytes written to key.")
+                raise MolnsUtilStorageException("No bytes written to key.")
         except Exception, e:
             return {'status':'failed', 'error':str(e)}
         return {'status':'success', 'num_bytes':num_bytes}
@@ -112,7 +133,7 @@ class S3Provider():
         try:
             obj = k.get_contents_as_string()
         except boto.exception.S3ResponseError, e:
-            raise PersistentStorageException("Could not retrive object from the datastore."+str(e))
+            raise MolnsUtilStorageException("Could not retrive object from the datastore."+str(e))
         return obj
 
     def delete(self, name):
@@ -155,7 +176,7 @@ class SwiftProvider():
                 try:
                     bucket = self.create_bucket(bucket_name)
                 except Exception, e:
-                    raise PersistentStorageException("Failed to create/set bucket in the object store."+str(e))
+                    raise MolnsUtilStorageException("Failed to create/set bucket in the object store."+str(e))
             
             self.bucket = bucket
 
@@ -185,6 +206,9 @@ class SwiftProvider():
 
     def close(self):
         self.connection.close()
+
+    def __del__(self):
+        self.close()
 #print self.connection.get_container()
 
 
@@ -210,7 +234,7 @@ class PersistentStorage():
         elif s3config['provider_type'] == 'OpenStack':
             self.provider = SwiftProvider(bucket_name)
         else:
-            raise PersistentStorageException("Unknown provider type.")
+            raise MolnsUtilStorageException("Unknown provider type.")
         
 
     def list_buckets(self):
@@ -230,7 +254,7 @@ class PersistentStorage():
                 try:
                     bucket = self.provider.create_bucket(bucket_name)
                 except Exception, e:
-                    raise PersistentStorageException("Failed to create/set bucket in the object store."+str(e))
+                    raise MolnsUtilStorageException("Failed to create/set bucket in the object store: "+str(e))
                         
         self.bucket = bucket
 
@@ -254,28 +278,134 @@ class PersistentStorage():
         self.provider.delete_all()
 
 
-class DistributedEnsemble():
-    """ A distributed ensemble based on a pyurdme model. """
 
-    def __init__(self, model=None, number_of_realizations=1, persistent=False):
-        """ """
-        self.model = model
+def map_and_reduce(results, mapper, reducer):
+    "Reduces a list of results by applying the map function 'mapper'.  "
+    
+    import dill
+    import numpy
+    from molnsutil import PersistentStorage, LocalStorage
+    ps = PersistentStorage()
+    ls = LocalStorage()
+    
+    num_processed=0
+    res = None
+    for i,filename in enumerate(results):
+        try:
+            try:
+                result = ls.get(filename)
+            except:
+                result = ps.get(filename)
+                ls.put(filename, result)
+                
+            mapres = mapper(result)
+            res = reducer(mapres, res)
+            num_processed +=1
+        except Exception as e:
+            raise
+    return {'result':res, 'num_sucessful':num_processed, 'num_failed':len(results)-num_processed}
+    
+class DistributedEnsemble():
+    """ A distributed ensemble. """
+
+    def __init__(self, name=None, model_class=None, model=None, client=None, number_of_realizations=1, persistent=False):
+        """ hjhkjhjk """
+        self.model_class = model_class
         self.number_of_realizations = number_of_realizations
         self.persistent = persistent
-    
-    def set_model(model):
-        self.model = model
-
-    def add_realizations(self, number_of_realizations=1):
-        """ Add a number of realizations to the ensemble. """
-
-    def mean(self, g=None, number_of_realizations=None):
-        """ Compute the mean of the function g(X) based on number_of_realizations realizations
-            in the ensemble. """
         
-        mean_value = self.moment(function_handle, number_of_realizations=number_of_realizations)
+        # A chunk list
+        self.results = [] 
+        # We can build an index that maps filenames to the engines where the file is and 
+        # guide scheduling. 
+        self.file_index = {}
+        
+        self.update_client(client)
+     
+    def update_client(self, client=None):
+        if client is None:
+            self.c = IPython.parallel.Client()
+        else: 
+            self.c = client
+        self.c[:].use_dill()
+        self.dv = self.c[:]
+        self.lv = self.c.load_balanced_view()
+        
+    def rebalance_chunk_list(self):
+        """ It seems like it can be necessary to be able to rebalance the chunk list if
+            the number of engines change. Like if you suddenly have more engines than chunks, you 
+            want to create more chunks. """
+        
+    def add_realizations(self, number_of_realizations=1, chunk_size=1, blocking=True):
+        """ Add a number of realizations to the ensemble. """
+        model = self.model_class()
+        #num_chunks=number_of_realizations
+        num_chunks = int(number_of_realizations/chunk_size)
+        chunks = [chunk_size]*(num_chunks-1)
+        chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
+        #num_chunks = number_of_realizations
+        #num_chunks=self._determine_chunk_size()
+        #if nt < num_chunks:
+        #    num_chunks=nt
+        #else:
+        #    nt = int(number_of_realizations/num_chunks)
+        #reminder = number_of_trajectories-nt
+        
+        results  = self.lv.map_async(run_ensemble,[model]*num_chunks,chunks,range(num_chunks))
+        results.wait()
+        for r in results:
+            self.results.append(r)
+        return {'wall_time':results.wall_time, 'results': results}
+    
+    def _determine_chunk_size(self):
+        """ Determine a good chunk size in some clever way. """
+        num_chunks = len(self.c.ids())
+        return num_chunks
 
-    def variance(self, g=None, number_of_realizations=None):
+    def save():
+        """ Save the data in the object store. """
+        
+    def _clear_cache(self):
+        """ Remove all cached result objects on the engines. """
+        
+    def delete_realizations(self):
+        """ Delete realizations from the object store. """
+        
+    
+    def mean(self, mapper=None, number_of_realizations=None, blocking=True, interactive=False):
+        """ Compute the mean of the function g(X) based on number_of_realizations realizations
+            in the ensemble. It has to make sense to say g(result1)+g(result2). """
+        
+        num_chunks = len(self.c.ids)
+        
+        # Now map the postprocessing routine using the view that matches the file locations on the engines. 
+        pr = self.c[:].map_async(map_and_reduce, self.results, [mapper]*len(self.results),[add]*len(self.results))
+        #pr.wait()
+        res = {}
+        num_sucessful=0
+        for i,p in enumerate(pr):
+            try:
+                if i==0:
+                    meanx = p['result']/p['num_sucessful']
+                else:
+                    meanx = meanx+p['result']/p['num_sucessful']
+                num_sucessful+=1
+                if interactive:
+                    print meanx/num_sucessful
+            except Exception as e:
+                raise                
+        #pr.wait()
+        # This does not work, we can't just assume that the result is a numeric array. What can we assume?
+        # Can we assume that it makes sense to say pr[0]+pr[1] etc. (i.e. that the '+' operator is defined for the 
+        # result types?)
+        res['mean'] = meanx/num_sucessful
+        res['wall_time']=pr.wall_time
+        #res['variance'] = 
+        #res['confidence_interval'] = 
+        return res
+        
+   
+    def mean_variance(self, g=None, number_of_realizations=None):
         """ Compute the variance (second order central moment) of the function g(X) based on number_of_realizations realizations
             in the ensemble. """
 
@@ -283,15 +413,32 @@ class DistributedEnsemble():
         """ Compute the moment of order 'order' of g(X), using number_of_realizations
             realizations in the ensemble. """
 
-    def density(self, g=None, number_of_realizations=None):
+    def histogram_density(self, g=None, number_of_realizations=None):
         """ Estimate the probability density function of g(X) based on number_of_realizations realizations
             in the ensemble. """
 
 
 
-class PersistentStorageException(Exception):
+
+
+
+class ParameterSweep():
+    """ Making parameter sweeps on distributed compute systems easier. """
+    def __init__(self, model_class, parameters, number_of_realizations=1, persistent_data=False, persistent_data_delete_timeout='48hr', mapper=None, reducer=None):
+        pass
+
+
+class ParameterSweepResult():
+    """TODO"""
     pass
-	
+
+class ParameterSweepResultList():
+    """TODO"""
+    pass
+
+
+
+
 
 if __name__ == '__main__':
     
