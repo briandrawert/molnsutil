@@ -132,11 +132,6 @@ class S3Provider():
         return self.bucket.list()
 
 
-
-
-
-
-
 class SwiftProvider():
     def __init__(self, bucket_name):
         self.connection = swiftclient.client.Connection(auth_version=2.0,**s3config['credentials'])
@@ -185,7 +180,9 @@ class SwiftProvider():
 
     def close(self):
         self.connection.close()
-#print self.connection.get_container()
+
+    def __del__(self):
+        self.close()
 
 
 class PersistentStorage():
