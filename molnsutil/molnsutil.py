@@ -275,7 +275,7 @@ class PersistentStorage():
         self.provider.delete_all()
 
 
-def run_ensemble(model,nt,s,storage_mode="Shared"):
+def run_ensemble(model,nt,storage_mode="Shared"):
     """ Generates an ensemble consisting of number_of_trajectories realizations by
         running pyurdme nt number of times. The resulting pyurdme result objects
         are serialized and written to one of the MOLNs storage locations, each
@@ -299,11 +299,11 @@ def run_ensemble(model,nt,s,storage_mode="Shared"):
         storage = PersistentStorage()
     # Run the solver
     solver = NSMSolver(model)
-    
+    seed_base = int(uuid.uuid4())
     filenames = []
     for i in range(nt):
         try:
-            result = solver.run(seed=s*engine_id*nt+i)
+            result = solver.run(seed=seed_base+i)
             filename = str(uuid.uuid1())
             storage.put(filename, result)
             filenames.append(filename)
@@ -406,7 +406,7 @@ class DistributedEnsemble():
         num_chunks = int(number_of_realizations/chunk_size)
         chunks = [chunk_size]*(num_chunks-1)
         chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
-        results  = self.lv.map_async(run_ensemble,[model]*num_chunks,chunks,range(len(chunks)))
+        results  = self.lv.map_async(run_ensemble,[model]*num_chunks,chunks)
         
         if progress_bar:
             # This should be factored out somehow.
