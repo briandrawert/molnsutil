@@ -25,6 +25,9 @@ from boto.s3.key import Key
 import uuid
 
 import swiftclient.client
+import IPython.parallel
+import uuid
+from IPython.display import HTML, Javascript, display
 
 class MolnsUtilStorageException(Exception):
     pass
