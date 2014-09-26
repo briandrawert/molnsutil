@@ -305,7 +305,7 @@ def run_ensemble(model,nt,s,storage_mode="Shared"):
             storage.put(filename, result)
             filenames.append(filename)
         except:
-            pass
+            raise
     
     return filenames
 
@@ -400,7 +400,6 @@ class DistributedEnsemble():
     def add_realizations(self, number_of_realizations=1, chunk_size=1, blocking=True, progress_bar=True):
         """ Add a number of realizations to the ensemble. """
         model = self.model_class()
-        #num_chunks=number_of_realizations
         num_chunks = int(number_of_realizations/chunk_size)
         chunks = [chunk_size]*(num_chunks-1)
         chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
