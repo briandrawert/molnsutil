@@ -272,36 +272,106 @@ class PersistentStorage():
         self.provider.delete_all()
 
 
+def run_ensemble(model,nt,s,storage_mode="Shared"):
+    """ Generates an ensemble consisting of number_of_trajectories realizations by
+        running pyurdme nt number of times. The resulting pyurdme result objects
+        are serialized and written to one of the MOLNs storage locations, each
+        assigned a random filename. The default behavior is to write the
+        files to the Shared storage location (global non-persistent). Optionally, files can be
+        written to the Object Store (global persistent), storage_model="Persistent"
+        
+        Returns: a list of filenames for the serialized result objects.
+        
+        """
+    
+    import pyurdme
+    from pyurdme.nsmsolver import NSMSolver
+    import sys
+    import uuid
+    from molnsutil import PersistentStorage, LocalStorage, SharedStorage
+    
+    if storage_mode=="Shared":
+        storage  = SharedStorage()
+    elif storage_mode=="Persistent":
+        storage = PersistentStorage()
+    # Run the solver
+    solver = NSMSolver(model)
+    
+    filenames = []
+    for i in range(nt):
+        try:
+            result = solver.run(seed=s*engine_id*nt+i)
+            filename = str(uuid.uuid1())
+            storage.put(filename, result)
+            filenames.append(filename)
+        except:
+            pass
+    
+    return filenames
 
-def map_and_reduce(results, mapper, reducer):
-    "Reduces a list of results by applying the map function 'mapper'.  "
+
+def add(a, b=None):
+    if b==None:
+        return a
+    return a+b
+
+def map_and_reduce(results, mapper, reducer, cache_results=False):
+    """ Reduces a list of results by applying the map function 'mapper'.
+        When this function is applied on an engine, it will first
+        look for the result object in the local ephemeral storage (cache),
+        then in the Shared area (global non-persisitent), then in the
+        Object Store (global persistent).
+        
+        If cache_results=True, then result objects will be written
+        to the local epehemeral storage (file cache), so subsequent
+        postprocessing jobs may run faster.
+        
+        """
     
     import dill
     import numpy
-    from molnsutil import PersistentStorage, LocalStorage
+    from molnsutil import PersistentStorage, LocalStorage, SharedStorage
     ps = PersistentStorage()
+    ss = SharedStorage()
     ls = LocalStorage()
     
     num_processed=0
     res = None
+    result = None
     for i,filename in enumerate(results):
         try:
+            result = ls.get(filename)
+        except:
+            pass
+        
+        if result is None:
             try:
-                result = ls.get(filename)
+                result = ss.get(filename)
+                if cache_results:
+                    ls.put(filename, result)
             except:
+                pass
+        
+        if result is None:
+            try:
                 result = ps.get(filename)
-                ls.put(filename, result)
-                
+                if cache_results:
+                    ls.put(filename, result)
+            except:
+                pass
+        
+        try:
             mapres = mapper(result)
             res = reducer(mapres, res)
             num_processed +=1
         except Exception as e:
             raise
-    return {'result':res, 'num_sucessful':num_processed, 'num_failed':len(results)-num_processed}
     
+    return {'result':res, 'num_sucessful':num_processed, 'num_failed':len(results)-num_processed}
+
 class DistributedEnsemble():
     """ A distributed ensemble. """
-
+    
     def __init__(self, name=None, model_class=None, model=None, client=None, number_of_realizations=1, persistent=False):
         """ hjhkjhjk """
         self.model_class = model_class
@@ -309,71 +379,76 @@ class DistributedEnsemble():
         self.persistent = persistent
         
         # A chunk list
-        self.results = [] 
-        # We can build an index that maps filenames to the engines where the file is and 
-        # guide scheduling. 
-        self.file_index = {}
+        self.result_list = []
         
         self.update_client(client)
-     
+    
     def update_client(self, client=None):
         if client is None:
             self.c = IPython.parallel.Client()
-        else: 
+        else:
             self.c = client
         self.c[:].use_dill()
         self.dv = self.c[:]
         self.lv = self.c.load_balanced_view()
-        
+    
     def rebalance_chunk_list(self):
         """ It seems like it can be necessary to be able to rebalance the chunk list if
-            the number of engines change. Like if you suddenly have more engines than chunks, you 
+            the number of engines change. Like if you suddenly have more engines than chunks, you
             want to create more chunks. """
-        
-    def add_realizations(self, number_of_realizations=1, chunk_size=1, blocking=True):
+    
+    def add_realizations(self, number_of_realizations=1, chunk_size=1, blocking=True, progress_bar=True):
         """ Add a number of realizations to the ensemble. """
         model = self.model_class()
         #num_chunks=number_of_realizations
         num_chunks = int(number_of_realizations/chunk_size)
         chunks = [chunk_size]*(num_chunks-1)
         chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
-        #num_chunks = number_of_realizations
-        #num_chunks=self._determine_chunk_size()
-        #if nt < num_chunks:
-        #    num_chunks=nt
-        #else:
-        #    nt = int(number_of_realizations/num_chunks)
-        #reminder = number_of_trajectories-nt
+        results  = self.lv.map_async(run_ensemble,[model]*num_chunks,chunks,range(len(chunks)))
         
-        results  = self.lv.map_async(run_ensemble,[model]*num_chunks,chunks,range(num_chunks))
-        results.wait()
-        for r in results:
-            self.results.append(r)
-        return {'wall_time':results.wall_time, 'results': results}
+        if progress_bar:
+            # This should be factored out somehow.
+            divid = str(uuid.uuid4())
+            pb = HTML(
+                      """
+                          <div style="border: 1px solid black; width:500px">
+                          <div id="%s" style="background-color:blue; width:0%%">&nbsp;</div>
+                          </div>
+                          """ % divid)
+            display(pb)
+        
+        # We process the results as they arrive.
+        for i,r in enumerate(results):
+            self.result_list.append(r)
+            if progress_bar:
+                display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(i+1)/len(results))))
+        
+        
+        return {'wall_time':results.wall_time}
     
     def _determine_chunk_size(self):
         """ Determine a good chunk size in some clever way. """
         num_chunks = len(self.c.ids())
         return num_chunks
-
+    
     def save():
         """ Save the data in the object store. """
-        
+    
     def _clear_cache(self):
         """ Remove all cached result objects on the engines. """
-        
+    
     def delete_realizations(self):
         """ Delete realizations from the object store. """
-        
     
-    def mean(self, mapper=None, number_of_realizations=None, blocking=True, interactive=False):
+    
+    def mean(self, mapper=None, number_of_realizations=None, blocking=True, interactive=False, cache_results=False):
         """ Compute the mean of the function g(X) based on number_of_realizations realizations
             in the ensemble. It has to make sense to say g(result1)+g(result2). """
         
         num_chunks = len(self.c.ids)
-        
-        # Now map the postprocessing routine using the view that matches the file locations on the engines. 
-        pr = self.c[:].map_async(map_and_reduce, self.results, [mapper]*len(self.results),[add]*len(self.results))
+        nc = len(self.result_list)
+        # Now map the postprocessing routine using the view that matches the file locations on the engines.
+        pr = self.c[:].map_async(map_and_reduce, self.result_list, [mapper]*nc,[add]*nc,[cache_results]*nc)
         #pr.wait()
         res = {}
         num_sucessful=0
@@ -387,30 +462,26 @@ class DistributedEnsemble():
                 if interactive:
                     print meanx/num_sucessful
             except Exception as e:
-                raise                
-        #pr.wait()
-        # This does not work, we can't just assume that the result is a numeric array. What can we assume?
-        # Can we assume that it makes sense to say pr[0]+pr[1] etc. (i.e. that the '+' operator is defined for the 
-        # result types?)
+                raise
+        
         res['mean'] = meanx/num_sucessful
         res['wall_time']=pr.wall_time
-        #res['variance'] = 
-        #res['confidence_interval'] = 
+        #res['variance'] =
+        #res['confidence_interval'] =
         return res
-        
-   
+    
+    
     def mean_variance(self, g=None, number_of_realizations=None):
         """ Compute the variance (second order central moment) of the function g(X) based on number_of_realizations realizations
             in the ensemble. """
-
+    
     def moment(self, g=None, order=1, number_of_realizations=None):
         """ Compute the moment of order 'order' of g(X), using number_of_realizations
             realizations in the ensemble. """
-
+    
     def histogram_density(self, g=None, number_of_realizations=None):
         """ Estimate the probability density function of g(X) based on number_of_realizations realizations
             in the ensemble. """
-
 
 
 
