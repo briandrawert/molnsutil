@@ -400,13 +400,13 @@ class DistributedEnsemble():
             the number of engines change. Like if you suddenly have more engines than chunks, you
             want to create more chunks. """
     
-    def add_realizations(self, number_of_realizations=1, chunk_size=1, blocking=True, progress_bar=True):
+    def add_realizations(self, number_of_realizations=1, chunk_size=1, blocking=True, progress_bar=True, storage_mode="Shared"):
         """ Add a number of realizations to the ensemble. """
         model = self.model_class()
         num_chunks = int(number_of_realizations/chunk_size)
         chunks = [chunk_size]*(num_chunks-1)
         chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
-        results  = self.lv.map_async(run_ensemble,[model]*num_chunks,chunks)
+        results  = self.lv.map_async(run_ensemble,[model]*num_chunks,chunks,[storage_mode]*num_chunks)
         
         if progress_bar:
             # This should be factored out somehow.
