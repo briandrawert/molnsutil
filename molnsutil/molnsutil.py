@@ -105,10 +105,9 @@ class S3Provider():
                 bucket = self.connection.get_bucket(bucket_name)
             except:
                 try:
-                    bucket = self.provider.create_bucket(bucket_name)
+                    bucket = self.create_bucket(bucket_name)
                 except Exception, e:
                     raise MolnsUtilStorageException("Failed to create/set bucket in the object store."+str(e))
-        
             self.bucket = bucket
 
     def create_bucket(self,bucket_name):
@@ -304,7 +303,7 @@ def map_and_reduce(results, mapper, reducer):
         except Exception as e:
             raise
     return {'result':res, 'num_sucessful':num_processed, 'num_failed':len(results)-num_processed}
-    
+
 class DistributedEnsemble():
     """ A distributed ensemble. """
 
