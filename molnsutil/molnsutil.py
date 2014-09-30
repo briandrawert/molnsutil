@@ -487,8 +487,6 @@ class DistributedEnsemble():
 
 
 
-
-
 class ParameterSweep():
     """ Making parameter sweeps on distributed compute systems easier. """
     def __init__(self, model_class, parameters, number_of_realizations=1, persistent_data=False, persistent_data_delete_timeout='48hr', mapper=None, reducer=None):
