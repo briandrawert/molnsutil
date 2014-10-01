@@ -101,14 +101,14 @@ class S3Provider():
     def set_bucket(self,bucket_name=None):
         if not bucket_name:
             self.bucket_name = "molns_bucket_{0}".format(str(uuid.uuid1()))
-            bucket = self.provider.create_bucket(self.bucket_name)
+            bucket = self.connection.create_bucket(self.bucket_name)
         else:
             self.bucket_name = bucket_name
             try:
                 bucket = self.connection.get_bucket(bucket_name)
             except:
                 try:
-                    bucket = self.provider.create_bucket(bucket_name)
+                    bucket = self.connection.create_bucket(bucket_name)
                 except Exception, e:
                     raise MolnsUtilStorageException("Failed to create/set bucket in the object store."+str(e))
         
@@ -334,7 +334,10 @@ def map_and_reduce(results, mapper, reducer, cache_results=False):
     import dill
     import numpy
     from molnsutil import PersistentStorage, LocalStorage, SharedStorage
+
+
     ps = PersistentStorage()
+
     ss = SharedStorage()
     ls = LocalStorage()
     
@@ -383,6 +386,7 @@ class DistributedEnsemble():
         
         # A chunk list
         self.result_list = []
+        self.file_index
         
         self.update_client(client)
     
@@ -408,6 +412,7 @@ class DistributedEnsemble():
         chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
         results  = self.lv.map_async(run_ensemble,[model]*num_chunks,chunks,[storage_mode]*num_chunks)
         
+        # TODO: Refactor this so it can be reused by other methods.
         if progress_bar:
             # This should be factored out somehow.
             divid = str(uuid.uuid4())
@@ -468,7 +473,6 @@ class DistributedEnsemble():
         
         res['mean'] = meanx/num_sucessful
         res['wall_time']=pr.wall_time
-        #res['variance'] =
         #res['confidence_interval'] =
         return res
     
@@ -484,7 +488,6 @@ class DistributedEnsemble():
     def histogram_density(self, g=None, number_of_realizations=None):
         """ Estimate the probability density function of g(X) based on number_of_realizations realizations
             in the ensemble. """
-
 
 
 class ParameterSweep():
