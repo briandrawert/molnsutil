@@ -378,15 +378,17 @@ def map_and_reduce(results, mapper, reducer, cache_results=False):
 class DistributedEnsemble():
     """ A distributed ensemble. """
     
-    def __init__(self, name=None, model_class=None, model=None, client=None, number_of_realizations=1, persistent=False):
+    def __init__(self, name=None, model_class=None, model_arguments=None, client=None, number_of_realizations=1, persistent=False):
         """ hjhkjhjk """
         self.model_class = model_class
+        self.model_arguments = model_arguments
         self.number_of_realizations = number_of_realizations
         self.persistent = persistent
         
         # A chunk list
         self.result_list = []
         
+        # Set the Ipython.parallel client
         self.update_client(client)
     
     def update_client(self, client=None):
@@ -405,7 +407,8 @@ class DistributedEnsemble():
     
     def add_realizations(self, number_of_realizations=1, chunk_size=1, blocking=True, progress_bar=True, storage_mode="Shared"):
         """ Add a number of realizations to the ensemble. """
-        model = self.model_class()
+        
+        model = self.model_class(**self.model_arguments)
         num_chunks = int(number_of_realizations/chunk_size)
         chunks = [chunk_size]*(num_chunks-1)
         chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
@@ -454,7 +457,7 @@ class DistributedEnsemble():
         num_chunks = len(self.c.ids)
         nc = len(self.result_list)
         # Now map the postprocessing routine using the view that matches the file locations on the engines.
-        pr = self.c[:].map_async(map_and_reduce, self.result_list, [mapper]*nc,[add]*nc,[cache_results]*nc)
+        pr = self.dv.map_async(map_and_reduce, self.result_list, [mapper]*nc,[add]*nc,[cache_results]*nc)
         #pr.wait()
         res = {}
         num_sucessful=0
