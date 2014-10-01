@@ -386,7 +386,6 @@ class DistributedEnsemble():
         
         # A chunk list
         self.result_list = []
-        self.file_index
         
         self.update_client(client)
     
