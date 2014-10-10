@@ -23,11 +23,15 @@ from boto.s3.connection import S3Connection
 logging.basicConfig(filename="boto.log", level=logging.DEBUG)
 from boto.s3.key import Key
 import uuid
+import math
 
 import swiftclient.client
 import IPython.parallel
 import uuid
 from IPython.display import HTML, Javascript, display
+
+class MolnsUtilException(Exception):
+    pass
 
 class MolnsUtilStorageException(Exception):
     pass
@@ -273,8 +277,74 @@ class PersistentStorage():
         """ Delete all objects in the global storage area. """
         self.provider.delete_all()
 
+#------  default aggregators -----
+def builtin_aggregator_list_append(new_result, aggregated_results=None, parameters=None):
+    """ default chunk aggregator. """
+    if aggregated_results is None:
+        aggregated_results = []
+    aggregated_results.append(new_result)
+    return aggregated_results
 
-def run_ensemble(model,nt,storage_mode="Shared"):
+def builtin_aggregator_add(new_result, aggregated_results=None, parameters=None):
+    """ chunk aggregator for the mean function. """
+    if aggregated_results is None:
+        return (a, 1)
+    return (aggregated_results[0]+new_result, aggregated_results[1]+1)
+
+def builtin_aggregator_sum_and_sum2(new_result, aggregated_results=None, parameters=None):
+    """ chunk aggregator for the mean+variance function. """
+    if aggregated_results is None:
+        return (new_result, new_result**2, 1)
+    return (aggregated_results[0]+new_result, aggregated_results[1]+new_result**2, aggregated_results[2]+1)
+
+def builtin_reducer_mean(result_list, parameters=None):
+    """ Reducer to calculate the mean, use with 'builtin_aggregator_add' aggregator. """
+    sum = 0.0
+    n = 0.0
+    for r in result_list:
+        sum += r[0]
+        n += r[2]
+    return sum/n
+
+def builtin_reducer_mean_variance(result_list, parameters=None):
+    """ Reducer to calculate the mean and variance, use with 'builtin_aggregator_sum_and_sum2' aggregator. """
+    sum = 0.0
+    sum2 = 0.0
+    n = 0.0
+    for r in result_list:
+        sum += r[0]
+        sum2 += r[1]
+        n += r[2]
+    return (sum/n, (sum2 - (sum**2)/n)/n )
+
+
+#----- functions to use for the DistributedEnsemble class ----
+def run_ensemble_map_and_aggregate(model_class, parameters, seed_base, number_of_trajectories, mapper, aggregator=None):
+    """ Generate an ensemble, then run the mappers are aggreator.  This will not store the results. """
+    #TODO
+    import pyurdme
+    from pyurdme.nsmsolver import NSMSolver
+    import sys
+    import uuid
+    if aggregator is None:
+        aggregator = builtin_aggregator_list_append
+    # Create the model
+    model = model_class(**parameters)
+    # Run the solver
+    solver = NSMSolver(model)
+    res = None
+    for i in range(number_of_trajectories):
+        try:
+            result = solver.run(seed=seed_base+i)
+            mapres = mapper(result)
+            res = aggregator(mapres, res)
+            num_processed +=1
+        except Exception as e:
+            raise
+    #return {'result':res, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
+    return res
+
+def run_ensemble(model_class, parameters, seed_base, number_of_trajectories, storage_mode="Shared"):
     """ Generates an ensemble consisting of number_of_trajectories realizations by
         running pyurdme nt number of times. The resulting pyurdme result objects
         are serialized and written to one of the MOLNs storage locations, each
@@ -296,11 +366,12 @@ def run_ensemble(model,nt,storage_mode="Shared"):
         storage  = SharedStorage()
     elif storage_mode=="Persistent":
         storage = PersistentStorage()
+    # Create the model
+    model = model_class(**parameters)
     # Run the solver
     solver = NSMSolver(model)
-    seed_base = int(uuid.uuid4())
     filenames = []
-    for i in range(nt):
+    for i in range(number_of_trajectories):
         try:
             result = solver.run(seed=seed_base+i)
             filename = str(uuid.uuid1())
@@ -311,13 +382,7 @@ def run_ensemble(model,nt,storage_mode="Shared"):
     
     return filenames
 
-
-def add(a, b=None):
-    if b==None:
-        return a
-    return a+b
-
-def map_and_reduce(results, mapper, reducer, cache_results=False):
+def map_and_aggregate(results, mapper, aggregator=None, cache_results=False):
     """ Reduces a list of results by applying the map function 'mapper'.
         When this function is applied on an engine, it will first
         look for the result object in the local ephemeral storage (cache),
@@ -333,13 +398,11 @@ def map_and_reduce(results, mapper, reducer, cache_results=False):
     import dill
     import numpy
     from molnsutil import PersistentStorage, LocalStorage, SharedStorage
-
-
     ps = PersistentStorage()
-
     ss = SharedStorage()
     ls = LocalStorage()
-    
+    if aggregator is None:
+        aggregator = builtin_aggregator_list_append
     num_processed=0
     res = None
     result = None
@@ -367,61 +430,134 @@ def map_and_reduce(results, mapper, reducer, cache_results=False):
         
         try:
             mapres = mapper(result)
-            res = reducer(mapres, res)
+            res = aggregator(mapres, res)
             num_processed +=1
         except Exception as e:
             raise
-    return {'result':res, 'num_sucessful':num_processed, 'num_failed':len(results)-num_processed}
+    #return {'result':res, 'num_sucessful':num_processed, 'num_failed':len(results)-num_processed}  #If an error is raise, we get nothing back (except the exception), right?
+    return res
 
 class DistributedEnsemble():
-    """ A distributed ensemble. """
+    """ A class to provide an API for execution of a distributed ensemble. """
     
-    def __init__(self, name=None, model_class=None, model_arguments=None, client=None, number_of_realizations=1, persistent=False):
-        """ hjhkjhjk """
+    def __init__(self, name=None, model_class=None, parameters=None, client=None):
+        """ Constructor """
         self.model_class = model_class
-        self.model_arguments = model_arguments
-        self.number_of_realizations = number_of_realizations
-        self.persistent = persistent
-        
+        self.parameters = parameters
+        self.number_of_realizations = 0
+        self.seed_base = int(uuid.uuid4())
         # A chunk list
         self.result_list = []
-        
         # Set the Ipython.parallel client
-        self.update_client(client)
+        self._update_client(client)
+
+    #--------------------------
+    def save_state(self, name):
+        """ Serialize the state of the ensemble, for persistence beyond memory."""
+        state = {}
+        state['model_class'] = self.model_class
+        state['parameters'] = self.parameters
+        state['number_of_realizations'] = self.number_of_realizations
+        state['seed_base'] = self.seed_base
+        state['result_list'] = self.result_list
+        if not os.path.isdir('.molnsutil'):
+            os.makedirs('.molnsutil')
+        with open('.molnsutil/DistributedEnsemble-{0}'.format(name)) as fd:
+            pickle.dump(state, fd)
+
+    def load_state(self, name):
+        """ Recover the state of an ensemble from a previous save. """
+        with open('.molnsutil/DistributedEnsemble-{0}'.format(name)) as fd:
+            state = pickle.load(fd)
+        if state['model_class'] is not self.model_class:
+            raise MolnsUtilException("Can only load state of a class that is identical to the original class")
+        self.parameters = state['parameters']
+        self.number_of_realizations = state['number_of_realizations']
+        self.seed_base = state['seed_base']
+        self.result_list = state['result_list']
     
-    def update_client(self, client=None):
-        if client is None:
-            self.c = IPython.parallel.Client()
+    #--------------------------
+    # MAIN FUNCTION
+    def run(self, mapper=None, aggregator=None, reducer=None, number_of_realizations=None, chunk_size=None, verbose=True, progress_bar=True, blocking=True, cache_results=True):
+        """ Main entry point """
+        # Do we have enough trajectores yet?
+        if number_of_realizations is None and self.number_of_realizations == 0:
+            raise MolnsUtilException("number_of_realizations is zero")
+        # Run simulations
+        if self.number_of_realizations < number_of_realizations:
+            self.add_realizations( number_of_realizations - self.number_of_realizations, chunk_size=chunk_size, verbose=verbose, cache_results=cache_results)
+
+        # Run mapper & aggregator
+        if chunk_size is None:
+            chunk_size = self._determine_chunk_size(len(self.result_list))
+        num_chunks = math.ceil(number_of_realizations/chunk_size)
+
+        results = self.lv.map_async(map_and_aggregate, self.result_list, [mapper]*num_chunks,[aggregator]*num_chunks,[cache_results]*num_chunks)
+        if verbose:
+            print "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(len(self.result_list), chunk_size)
         else:
-            self.c = client
-        self.c[:].use_dill()
-        self.dv = self.c[:]
-        self.lv = self.c.load_balanced_view()
+            progress_bar=False
+        
+        if progress_bar:
+            # This should be factored out somehow.
+            divid = str(uuid.uuid4())
+            pb = HTML("""
+                          <div style="border: 1px solid black; width:500px">
+                          <div id="{0}" style="background-color:blue; width:0%%">&nbsp;</div>
+                          </div>
+                          """.format(divid))
+            display(pb)
+        
+        # We process the results as they arrive.
+        mapped_results = []
+        for i,r in enumerate(results):
+            if type(r) is type([]):
+                mapped_results.extend(r) #if a list is returned, extend that list
+            else:
+                mapped_results.append(r)
+            if progress_bar:
+                display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(i+1)/len(results))))
+
+        # Run reducer
+        return reducer(mapped_results, parameters=self.parameters)
+
     
-    def rebalance_chunk_list(self):
-        """ It seems like it can be necessary to be able to rebalance the chunk list if
-            the number of engines change. Like if you suddenly have more engines than chunks, you
-            want to create more chunks. """
-    
-    def add_realizations(self, number_of_realizations=1, chunk_size=1, blocking=True, progress_bar=True, storage_mode="Shared"):
+    #--------------------------
+    def add_realizations(self, number_of_realizations=None, chunk_size=None, blocking=True, verbose=True, progress_bar=True, storage_mode="Shared"):
         """ Add a number of realizations to the ensemble. """
         
-        model = self.model_class(**self.model_arguments)
-        num_chunks = int(number_of_realizations/chunk_size)
+        if number_of_realizations is None:
+            raise MolnsUtilException("No number_of_realizations specified")
+        if type(number_of_realizations) is not type(1):
+            raise MolnsUtilException("number_of_realizations must be an integer")
+        
+        if chunk_size in None:
+            chunk_size = self._determine_chunk_size(number_of_realizations)
+
+        if not verbose:
+            progress_bar=False
+        else:
+            print "Generating {0} realizations of the model (chunk size={1})".format(number_of_realizations,chunk_size)
+        
+        self.number_of_realizations += number_of_realizations
+        
+        num_chunks = math.ceil(number_of_realizations/chunk_size)
         chunks = [chunk_size]*(num_chunks-1)
         chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
-        results  = self.lv.map_async(run_ensemble,[model]*num_chunks,chunks,[storage_mode]*num_chunks)
+        seed_list = range(self.seed_base, self.seed_base+number_of_realizations, chunk_size)
+        self.seed_base += number_of_realizations
+        results  = self.lv.map_async(run_ensemble, [model_class]*num_chunks, [self.parameters]*num_chunks, seed_list, chunks, [storage_mode]*num_chunks)
+            #TODO: results here should be a class 'RemoteResults' which has model parameters and location
         
         # TODO: Refactor this so it can be reused by other methods.
         if progress_bar:
             # This should be factored out somehow.
             divid = str(uuid.uuid4())
-            pb = HTML(
-                      """
+            pb = HTML("""
                           <div style="border: 1px solid black; width:500px">
-                          <div id="%s" style="background-color:blue; width:0%%">&nbsp;</div>
+                          <div id="{0}" style="background-color:blue; width:0%%">&nbsp;</div>
                           </div>
-                          """ % divid)
+                          """.format(divid))
             display(pb)
         
         # We process the results as they arrive.
@@ -433,61 +569,63 @@ class DistributedEnsemble():
         
         return {'wall_time':results.wall_time}
     
-    def _determine_chunk_size(self):
-        """ Determine a good chunk size in some clever way. """
-        num_chunks = len(self.c.ids())
-        return num_chunks
+
     
-    def save():
-        """ Save the data in the object store. """
-    
-    def _clear_cache(self):
-        """ Remove all cached result objects on the engines. """
-    
-    def delete_realizations(self):
-        """ Delete realizations from the object store. """
-    
-    
-    def mean(self, mapper=None, number_of_realizations=None, blocking=True, interactive=False, cache_results=False):
+    #-------- Convience functions with builtin mappers/reducers  ------------------
+
+    def mean_variance(self, mapper=None, number_of_realizations=None, verbose=True):
+        """ Compute the mean and variance (second order central moment) of the function g(X) based on number_of_realizations realizations
+            in the ensemble. """
+        return self.run(mapper=mapper, aggregator=builtin_aggregator_sum_and_sum2, reducer=builtin_reducer_mean_variance, number_of_realizations=number_of_realizations, verbose=verbose)
+
+    def mean(self, mapper=None, number_of_realizations=None, verbose=True):
         """ Compute the mean of the function g(X) based on number_of_realizations realizations
             in the ensemble. It has to make sense to say g(result1)+g(result2). """
-        
-        num_chunks = len(self.c.ids)
-        nc = len(self.result_list)
-        # Now map the postprocessing routine using the view that matches the file locations on the engines.
-        pr = self.dv.map_async(map_and_reduce, self.result_list, [mapper]*nc,[add]*nc,[cache_results]*nc)
-        #pr.wait()
-        res = {}
-        num_sucessful=0
-        for i,p in enumerate(pr):
-            try:
-                if i==0:
-                    meanx = p['result']/p['num_sucessful']
-                else:
-                    meanx = meanx+p['result']/p['num_sucessful']
-                num_sucessful+=1
-                if interactive:
-                    print meanx/num_sucessful
-            except Exception as e:
-                raise
-        
-        res['mean'] = meanx/num_sucessful
-        res['wall_time']=pr.wall_time
-        #res['confidence_interval'] =
-        return res
-    
-    
-    def mean_variance(self, g=None, number_of_realizations=None):
-        """ Compute the variance (second order central moment) of the function g(X) based on number_of_realizations realizations
-            in the ensemble. """
-    
+        return self.run(mapper=mapper, aggregator=builtin_aggregator_add, reducer=builtin_reducer_mean, number_of_realizations=number_of_realizations, verbose=verbose)
+   
+
     def moment(self, g=None, order=1, number_of_realizations=None):
         """ Compute the moment of order 'order' of g(X), using number_of_realizations
             realizations in the ensemble. """
+            raise Exception('TODO')
     
     def histogram_density(self, g=None, number_of_realizations=None):
         """ Estimate the probability density function of g(X) based on number_of_realizations realizations
             in the ensemble. """
+            raise Exception('TODO')
+
+    #--------------------------
+
+    def _update_client(self, client=None):
+        if client is None:
+            self.c = IPython.parallel.Client()
+        else:
+            self.c = client
+        self.c[:].use_dill()
+        self.dv = self.c[:]
+        self.lv = self.c.load_balanced_view()
+
+    def _determine_chunk_size(self, number_of_realizations):
+        """ Determine a optimal chunk size. """
+        num_chunks = len(self.c.ids())
+        return round(number_of_realizations/float(num_chunks))
+
+    # TODO: take a hard look at the following functions
+    def rebalance_chunk_list(self):
+        """ It seems like it can be necessary to be able to rebalance the chunk list if
+            the number of engines change. Like if you suddenly have more engines than chunks, you
+            want to create more chunks. """
+
+    def _clear_cache(self):
+        """ Remove all cached result objects on the engines. """
+        pass
+        # TODO
+    
+    def delete_realizations(self):
+        """ Delete realizations from the object store. """
+        pass
+        # TODO
+
 
 
 class ParameterSweep():
