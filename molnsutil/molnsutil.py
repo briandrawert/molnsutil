@@ -297,6 +297,10 @@ def builtin_aggregator_sum_and_sum2(new_result, aggregated_results=None, paramet
         return (new_result, new_result**2, 1)
     return (aggregated_results[0]+new_result, aggregated_results[1]+new_result**2, aggregated_results[2]+1)
 
+def builtin_reducer_default(result_list, parameters=None):
+    """ Default passthrough reducer. """
+    return result_list
+
 def builtin_reducer_mean(result_list, parameters=None):
     """ Reducer to calculate the mean, use with 'builtin_aggregator_add' aggregator. """
     sum = 0.0
@@ -319,7 +323,7 @@ def builtin_reducer_mean_variance(result_list, parameters=None):
 
 
 #----- functions to use for the DistributedEnsemble class ----
-def run_ensemble_map_and_aggregate(model_class, parameters, seed_base, number_of_trajectories, mapper, aggregator=None):
+def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_base, number_of_trajectories, mapper, aggregator=None):
     """ Generate an ensemble, then run the mappers are aggreator.  This will not store the results. """
     #TODO
     import pyurdme
@@ -341,10 +345,9 @@ def run_ensemble_map_and_aggregate(model_class, parameters, seed_base, number_of
             num_processed +=1
         except Exception as e:
             raise
-    #return {'result':res, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
-    return res
+    return {'result':res, 'param_set_id',param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
 
-def run_ensemble(model_class, parameters, seed_base, number_of_trajectories, storage_mode="Shared"):
+def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_trajectories, storage_mode="Shared"):
     """ Generates an ensemble consisting of number_of_trajectories realizations by
         running pyurdme nt number of times. The resulting pyurdme result objects
         are serialized and written to one of the MOLNs storage locations, each
@@ -380,9 +383,9 @@ def run_ensemble(model_class, parameters, seed_base, number_of_trajectories, sto
         except:
             raise
     
-    return filenames
+    return {'filenames':filenames, 'param_set_id':param_set_id}
 
-def map_and_aggregate(results, mapper, aggregator=None, cache_results=False):
+def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_results=False):
     """ Reduces a list of results by applying the map function 'mapper'.
         When this function is applied on an engine, it will first
         look for the result object in the local ephemeral storage (cache),
@@ -434,20 +437,22 @@ def map_and_aggregate(results, mapper, aggregator=None, cache_results=False):
             num_processed +=1
         except Exception as e:
             raise
-    #return {'result':res, 'num_sucessful':num_processed, 'num_failed':len(results)-num_processed}  #If an error is raise, we get nothing back (except the exception), right?
-    return res
+    return {'result':res, 'param_set_id',param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
+
+    #return res
 
 class DistributedEnsemble():
     """ A class to provide an API for execution of a distributed ensemble. """
     
-    def __init__(self, name=None, model_class=None, parameters=None, client=None):
+    def __init__(self, model_class=None, parameters=None, client=None):
         """ Constructor """
+        self.my_class_name = 'DistributedEnsemble'
         self.model_class = model_class
-        self.parameters = parameters
+        self.parameters = [parameters]
         self.number_of_realizations = 0
         self.seed_base = int(uuid.uuid4())
         # A chunk list
-        self.result_list = []
+        self.result_list = {}
         # Set the Ipython.parallel client
         self._update_client(client)
 
@@ -462,12 +467,12 @@ class DistributedEnsemble():
         state['result_list'] = self.result_list
         if not os.path.isdir('.molnsutil'):
             os.makedirs('.molnsutil')
-        with open('.molnsutil/DistributedEnsemble-{0}'.format(name)) as fd:
+        with open('.molnsutil/{1}-{0}'.format(name, self.my_class_name)) as fd:
             pickle.dump(state, fd)
 
     def load_state(self, name):
         """ Recover the state of an ensemble from a previous save. """
-        with open('.molnsutil/DistributedEnsemble-{0}'.format(name)) as fd:
+        with open('.molnsutil/{1}-{0}'.format(name, self.my_class_name)) as fd:
             state = pickle.load(fd)
         if state['model_class'] is not self.model_class:
             raise MolnsUtilException("Can only load state of a class that is identical to the original class")
@@ -478,54 +483,105 @@ class DistributedEnsemble():
     
     #--------------------------
     # MAIN FUNCTION
-    def run(self, mapper=None, aggregator=None, reducer=None, number_of_realizations=None, chunk_size=None, verbose=True, progress_bar=True, blocking=True, cache_results=True):
+    #--------------------------
+    def run(self, mapper, aggregator=None, reducer=None, number_of_realizations=None, chunk_size=None, verbose=True, progress_bar=True, store_realizations=True, storage_mode="Shared", cache_results=False):
         """ Main entry point """
-        # Do we have enough trajectores yet?
-        if number_of_realizations is None and self.number_of_realizations == 0:
-            raise MolnsUtilException("number_of_realizations is zero")
-        # Run simulations
-        if self.number_of_realizations < number_of_realizations:
-            self.add_realizations( number_of_realizations - self.number_of_realizations, chunk_size=chunk_size, verbose=verbose, cache_results=cache_results)
+        if store_realizations:
+            if verbose:
+                print "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(len(self.result_list), chunk_size)
+            else:
+                progress_bar=False
+            # Do we have enough trajectores yet?
+            if number_of_realizations is None and self.number_of_realizations == 0:
+                raise MolnsUtilException("number_of_realizations is zero")
+            # Run simulations
+            if self.number_of_realizations < number_of_realizations:
+                self.add_realizations( number_of_realizations - self.number_of_realizations, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode, cache_results=cache_results)
 
-        # Run mapper & aggregator
-        if chunk_size is None:
-            chunk_size = self._determine_chunk_size(len(self.result_list))
-        num_chunks = math.ceil(number_of_realizations/chunk_size)
-
-        results = self.lv.map_async(map_and_aggregate, self.result_list, [mapper]*num_chunks,[aggregator]*num_chunks,[cache_results]*num_chunks)
-        if verbose:
-            print "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(len(self.result_list), chunk_size)
+            # chunks per parameter
+            if chunk_size is None:
+                chunk_size = self._determine_chunk_size(len(self.result_list))
+            num_chunks = math.ceil(len(self.result_list)/float(chunk_size))
+            # total chunks
+            pchunks = chunks*len(self.parameters)
+            num_pchunks = num_chunks*len(self.parameters)
+            pparams = []
+            param_set_ids = []
+            for id, param in enumerate(self.parameters):
+                param_set_ids.extend( [id]*num_chunks )
+                pparams.extend( [param]*num_chunks )
+            # Run mapper & aggregator
+            results = self.lv.map_async(map_and_aggregate, self.result_list, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
         else:
-            progress_bar=False
-        
+            # If we don't store the realizations (or use the stored ones)
+            if not verbose:
+                progress_bar=False
+            else:
+                print "Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})".format(number_of_realizations,chunk_size)
+            if chunk_size in None:
+                chunk_size = self._determine_chunk_size(number_of_realizations)
+                
+            # chunks per parameter
+            num_chunks = math.ceil(number_of_realizations/float(chunk_size))
+            chunks = [chunk_size]*(num_chunks-1)
+            chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
+            # total chunks
+            pchunks = chunks*len(self.parameters)
+            num_pchunks = num_chunks*len(self.parameters)
+            pparams = []
+            param_set_ids = []
+            for id, param in enumerate(self.parameters):
+                param_set_ids.extend( [id]*num_chunks )
+                pparams.extend( [param]*num_chunks )
+            
+            seed_list = []
+            for _ in range(len(parameters)):
+                #need to do it this way cause the number of run per chunk might not be even
+                seed_list.extend(range(self.seed_base, self.seed_base+number_of_realizations, chunk_size))
+                self.seed_base += number_of_realizations
+            #def run_ensemble_map_and_aggregate(model_class, parameters, seed_base, number_of_trajectories, mapper, aggregator=None):
+            results  = self.lv.map_async(run_ensemble_map_and_aggregate, [model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [mapper]*num_pchunks, [agggregator]*num_pchunks)
+
+    
         if progress_bar:
             # This should be factored out somehow.
             divid = str(uuid.uuid4())
             pb = HTML("""
                           <div style="border: 1px solid black; width:500px">
-                          <div id="{0}" style="background-color:blue; width:0%%">&nbsp;</div>
+                          <div id="{0}" style="background-color:blue; width:0%">&nbsp;</div>
                           </div>
                           """.format(divid))
             display(pb)
         
         # We process the results as they arrive.
-        mapped_results = []
-        for i,r in enumerate(results):
+        mapped_results = {}
+        for i,rset in enumerate(results):
+            param_set_id = rset['param_set_id']
+            r = rset['result']
+            if param_set_id not in mapped_results:
+                mapped_results[param_set_id] = []
             if type(r) is type([]):
-                mapped_results.extend(r) #if a list is returned, extend that list
+                mapped_results[param_set_id].extend(r) #if a list is returned, extend that list
             else:
-                mapped_results.append(r)
+                mapped_results[param_set_id].append(r)
             if progress_bar:
                 display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(i+1)/len(results))))
 
+        if verbose:
+            print "Running reducer on mapped and aggregated results (size={0})".format(len(mapped_results))
+        if reducer is None:
+            reducer = builtin_reducer_default
         # Run reducer
-        return reducer(mapped_results, parameters=self.parameters)
+        ret = ParameterSweepResultList()
+        for param_set_id, param in enumerate(self.parameters):
+            ret.append(ParameterSweepResult(reducer(mapped_results[param_set_id], parameters=param) parameters=param)
+        return ret
+
 
     
     #--------------------------
-    def add_realizations(self, number_of_realizations=None, chunk_size=None, blocking=True, verbose=True, progress_bar=True, storage_mode="Shared"):
+    def add_realizations(self, number_of_realizations=None, chunk_size=None, verbose=True, progress_bar=True, storage_mode="Shared"):
         """ Add a number of realizations to the ensemble. """
-        
         if number_of_realizations is None:
             raise MolnsUtilException("No number_of_realizations specified")
         if type(number_of_realizations) is not type(1):
@@ -544,9 +600,22 @@ class DistributedEnsemble():
         num_chunks = math.ceil(number_of_realizations/chunk_size)
         chunks = [chunk_size]*(num_chunks-1)
         chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
-        seed_list = range(self.seed_base, self.seed_base+number_of_realizations, chunk_size)
-        self.seed_base += number_of_realizations
-        results  = self.lv.map_async(run_ensemble, [model_class]*num_chunks, [self.parameters]*num_chunks, seed_list, chunks, [storage_mode]*num_chunks)
+        # total chunks
+        pchunks = chunks*len(self.parameters)
+        num_pchunks = num_chunks*len(self.parameters)
+        pparams = []
+        param_set_ids = []
+        for id, param in enumerate(self.parameters):
+            param_set_ids.extend( [id]*num_chunks )
+            pparams.extend( [param]*num_chunks )
+        
+        seed_list = []
+        for _ in range(len(parameters)):
+            #need to do it this way cause the number of run per chunk might not be even
+            seed_list.extend(range(self.seed_base, self.seed_base+number_of_realizations, chunk_size))
+            self.seed_base += number_of_realizations
+        
+        results  = self.lv.map_async(run_ensemble, [model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [storage_mode]*num_pchunks)
             #TODO: results here should be a class 'RemoteResults' which has model parameters and location
         
         # TODO: Refactor this so it can be reused by other methods.
@@ -555,14 +624,18 @@ class DistributedEnsemble():
             divid = str(uuid.uuid4())
             pb = HTML("""
                           <div style="border: 1px solid black; width:500px">
-                          <div id="{0}" style="background-color:blue; width:0%%">&nbsp;</div>
+                          <div id="{0}" style="background-color:blue; width:0%">&nbsp;</div>
                           </div>
                           """.format(divid))
             display(pb)
         
         # We process the results as they arrive.
-        for i,r in enumerate(results):
-            self.result_list.append(r)
+        for i,ret in enumerate(results):
+            r = ret['filenames']
+            param_set_id = ret['param_set_id']
+            if param_set_id not in self.result_list:
+                self.result_list[param_set_id] = []
+            self.result_list[param_set_id].append(r)
             if progress_bar:
                 display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(i+1)/len(results))))
         
@@ -628,17 +701,56 @@ class DistributedEnsemble():
 
 
 
-class ParameterSweep():
+class ParameterSweep(DistributedEnsemble):
     """ Making parameter sweeps on distributed compute systems easier. """
-    def __init__(self, model_class, parameters, number_of_realizations=1, persistent_data=False, persistent_data_delete_timeout='48hr', mapper=None, reducer=None):
-        pass
+
+    def __init__(self, model_class, parameters):
+        """ Constructor.
+        Args:
+          model_class: a class object of the model for simulation, must be a sub-class of URDMEModel
+          parameters:  either a dict or a list.
+            If it is a dict, the keys are the arguments to the class constructions and the
+              values are a list of values that argument should take.
+              e.g.: {'arg1':[1,2,3],'arg2':[1,2,3]}  will produce 9 parameter points.
+            If it is a list, where each element of the list is a dict
+            """
+        self.my_class_name = 'ParameterSweep'
+        self.model_class = model_class
+        self.number_of_realizations = 0
+        self.seed_base = int(uuid.uuid4())
+        self.result_list = []
+        # process the parameters
+        if type(parameters) is type({}):
+            #TODO
+            raise MolnsUtilException("TODO")
+        elif type(parameters) is type([]):
+            self.parameters = parameters
+        else
+            raise MolnsUtilException("parameters must be a dict.")
+        self.parameters = []
+        pkeys
+
+        # Set the Ipython.parallel client
+        self._update_client(client)
+
+    def _determine_chunk_size(self, number_of_realizations):
+        """ Determine a optimal chunk size. """
+        num_chunks = len(self.c.ids())
+        #TODO, update this to take parameters into account
+        return round(number_of_realizations/float(num_chunks))
+
+    #--------------------------
+
+
 
 
 class ParameterSweepResult():
     """TODO"""
-    pass
+    def __init__(self, result, parameters):
+        self.result = result
+        self.parameters = parameters
 
-class ParameterSweepResultList():
+class ParameterSweepResultList(list):
     """TODO"""
     pass
 
