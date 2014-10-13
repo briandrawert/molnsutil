@@ -345,7 +345,7 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
             num_processed +=1
         except Exception as e:
             raise
-    return {'result':res, 'param_set_id',param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
+    return {'result':res, 'param_set_id':param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
 
 def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_trajectories, storage_mode="Shared"):
     """ Generates an ensemble consisting of number_of_trajectories realizations by
@@ -437,7 +437,7 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
             num_processed +=1
         except Exception as e:
             raise
-    return {'result':res, 'param_set_id',param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
+    return {'result':res, 'param_set_id':param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
 
     #return res
 
@@ -574,7 +574,7 @@ class DistributedEnsemble():
         # Run reducer
         ret = ParameterSweepResultList()
         for param_set_id, param in enumerate(self.parameters):
-            ret.append(ParameterSweepResult(reducer(mapped_results[param_set_id], parameters=param) parameters=param)
+            ret.append(ParameterSweepResult(reducer(mapped_results[param_set_id], parameters=param), parameters=param))
         return ret
 
 
@@ -660,12 +660,12 @@ class DistributedEnsemble():
     def moment(self, g=None, order=1, number_of_realizations=None):
         """ Compute the moment of order 'order' of g(X), using number_of_realizations
             realizations in the ensemble. """
-            raise Exception('TODO')
+        raise Exception('TODO')
     
     def histogram_density(self, g=None, number_of_realizations=None):
         """ Estimate the probability density function of g(X) based on number_of_realizations realizations
             in the ensemble. """
-            raise Exception('TODO')
+        raise Exception('TODO')
 
     #--------------------------
 
@@ -725,7 +725,7 @@ class ParameterSweep(DistributedEnsemble):
             raise MolnsUtilException("TODO")
         elif type(parameters) is type([]):
             self.parameters = parameters
-        else
+        else:
             raise MolnsUtilException("parameters must be a dict.")
         self.parameters = []
         pkeys
