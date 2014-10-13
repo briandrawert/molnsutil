@@ -333,7 +333,10 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
     if aggregator is None:
         aggregator = builtin_aggregator_list_append
     # Create the model
-    model = model_class(**parameters)
+    if parameters is not None:
+        model = model_class(**parameters)
+    else:
+        model = model_class()
     # Run the solver
     solver = NSMSolver(model)
     res = None
@@ -370,7 +373,10 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     elif storage_mode=="Persistent":
         storage = PersistentStorage()
     # Create the model
-    model = model_class(**parameters)
+    if parameters is not None:
+        model = model_class(**parameters)
+    else:
+        model = model_class()
     # Run the solver
     solver = NSMSolver(model)
     filenames = []
