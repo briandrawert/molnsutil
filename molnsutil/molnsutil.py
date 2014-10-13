@@ -518,7 +518,7 @@ class DistributedEnsemble():
                 progress_bar=False
             else:
                 print "Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})".format(number_of_realizations,chunk_size)
-            if chunk_size in None:
+            if chunk_size is None:
                 chunk_size = self._determine_chunk_size(number_of_realizations)
                 
             # chunks per parameter
@@ -587,7 +587,7 @@ class DistributedEnsemble():
         if type(number_of_realizations) is not type(1):
             raise MolnsUtilException("number_of_realizations must be an integer")
         
-        if chunk_size in None:
+        if chunk_size is None:
             chunk_size = self._determine_chunk_size(number_of_realizations)
 
         if not verbose:
