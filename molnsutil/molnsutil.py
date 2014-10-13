@@ -501,7 +501,7 @@ class DistributedEnsemble():
             # chunks per parameter
             if chunk_size is None:
                 chunk_size = self._determine_chunk_size(len(self.result_list))
-            num_chunks = math.ceil(len(self.result_list)/float(chunk_size))
+            num_chunks = int(math.ceil(len(self.result_list)/float(chunk_size)))
             # total chunks
             pchunks = chunks*len(self.parameters)
             num_pchunks = num_chunks*len(self.parameters)
@@ -522,7 +522,7 @@ class DistributedEnsemble():
                 chunk_size = self._determine_chunk_size(number_of_realizations)
                 
             # chunks per parameter
-            num_chunks = math.ceil(number_of_realizations/float(chunk_size))
+            num_chunks = int(math.ceil(number_of_realizations/float(chunk_size)))
             chunks = [chunk_size]*(num_chunks-1)
             chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
             # total chunks
@@ -597,7 +597,7 @@ class DistributedEnsemble():
         
         self.number_of_realizations += number_of_realizations
         
-        num_chunks = math.ceil(number_of_realizations/chunk_size)
+        num_chunks = int(math.ceil(number_of_realizations/chunk_size))
         chunks = [chunk_size]*(num_chunks-1)
         chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
         # total chunks
