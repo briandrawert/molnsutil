@@ -687,8 +687,7 @@ class DistributedEnsemble():
             self.c = IPython.parallel.Client()
         else:
             self.c = client
-        #self.c[:].use_dill()
-        self.c[:].use_cloudpickle()
+        self.c[:].use_dill()
         self.dv = self.c[:]
         self.lv = self.c.load_balanced_view()
 
