@@ -373,10 +373,17 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     elif storage_mode=="Persistent":
         storage = PersistentStorage()
     # Create the model
-    if parameters is not None:
-        model = model_class(**parameters)
-    else:
-        model = model_class()
+    try:
+        if parameters is not None:
+            model = model_class(**parameters)
+        else:
+            model = model_class()
+    except Exception as e:
+        notes = "Error instantiantion the model class, caught {0}: {1}".format(type(e),e)
+        notes .= "pyurdme in dir()={0}\n".format('pyurdme' in dir())
+        notes .=  "dir={0}\n".format(dir())
+        raise MolnsUtilException(notes)
+
     # Run the solver
     solver = NSMSolver(model)
     filenames = []
