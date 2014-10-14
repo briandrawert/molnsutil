@@ -326,7 +326,6 @@ def builtin_reducer_mean_variance(result_list, parameters=None):
 #----- functions to use for the DistributedEnsemble class ----
 def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_base, number_of_trajectories, mapper, aggregator=None):
     """ Generate an ensemble, then run the mappers are aggreator.  This will not store the results. """
-    #TODO
     import pyurdme
     from pyurdme.nsmsolver import NSMSolver
     import sys
@@ -335,13 +334,13 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
         aggregator = builtin_aggregator_list_append
     # Create the model
     try:
-        modle_class_cls = dill.loads(model_class)
+        model_class_cls = dill.loads(model_class)
         if parameters is not None:
             model = model_class_cls(**parameters)
         else:
             model = model_class_cls()
     except Exception as e:
-        notes = "Error instantiantion the model class, caught {0}: {1}".format(type(e),e)
+        notes = "Error instantiation the model class, caught {0}: {1}\n".format(type(e),e)
         notes += "pyurdme in dir()={0}\n".format('pyurdme' in dir())
         notes +=  "dir={0}\n".format(dir())
         raise MolnsUtilException(notes)
@@ -369,7 +368,6 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         Returns: a list of filenames for the serialized result objects.
         
         """
-    
     import pyurdme
     from pyurdme.nsmsolver import NSMSolver
     import sys
@@ -382,13 +380,13 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         storage = PersistentStorage()
     # Create the model
     try:
-        modle_class_cls = dill.loads(model_class)
+        model_class_cls = dill.loads(model_class)
         if parameters is not None:
             model = model_class_cls(**parameters)
         else:
             model = model_class_cls()
     except Exception as e:
-        notes = "Error instantiantion the model class, caught {0}: {1}".format(type(e),e)
+        notes = "Error instantiation the model class, caught {0}: {1}\n".format(type(e),e)
         notes += "pyurdme in dir()={0}\n".format('pyurdme' in dir())
         notes +=  "dir={0}\n".format(dir())
         raise MolnsUtilException(notes)
