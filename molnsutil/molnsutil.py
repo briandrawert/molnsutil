@@ -24,6 +24,7 @@ logging.basicConfig(filename="boto.log", level=logging.DEBUG)
 from boto.s3.key import Key
 import uuid
 import math
+import dill
 
 import swiftclient.client
 import IPython.parallel
@@ -333,10 +334,17 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
     if aggregator is None:
         aggregator = builtin_aggregator_list_append
     # Create the model
-    if parameters is not None:
-        model = model_class(**parameters)
-    else:
-        model = model_class()
+    try:
+        modle_class_cls = dill.loads(model_class)
+        if parameters is not None:
+            model = model_class_cls(**parameters)
+        else:
+            model = model_class_cls()
+    except Exception as e:
+        notes = "Error instantiantion the model class, caught {0}: {1}".format(type(e),e)
+        notes += "pyurdme in dir()={0}\n".format('pyurdme' in dir())
+        notes +=  "dir={0}\n".format(dir())
+        raise MolnsUtilException(notes)
     # Run the solver
     solver = NSMSolver(model)
     res = None
@@ -374,10 +382,11 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         storage = PersistentStorage()
     # Create the model
     try:
+        modle_class_cls = dill.loads(model_class)
         if parameters is not None:
-            model = model_class(**parameters)
+            model = model_class_cls(**parameters)
         else:
-            model = model_class()
+            model = model_class_cls()
     except Exception as e:
         notes = "Error instantiantion the model class, caught {0}: {1}".format(type(e),e)
         notes += "pyurdme in dir()={0}\n".format('pyurdme' in dir())
@@ -460,7 +469,7 @@ class DistributedEnsemble():
     def __init__(self, model_class=None, parameters=None, client=None):
         """ Constructor """
         self.my_class_name = 'DistributedEnsemble'
-        self.model_class = model_class
+        self.model_class = dill.dumps(model_class)
         self.parameters = [parameters]
         self.number_of_realizations = 0
         self.seed_base = int(uuid.uuid4())
