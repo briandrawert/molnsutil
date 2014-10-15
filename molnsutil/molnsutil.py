@@ -89,7 +89,7 @@ class SharedStorage():
 
     def get(self, filename):
         with open(self.folder_name+"/"+filename, 'rb') as fh:
-            data = cloud.serialization.cloudpickle.load(fh)
+            data = cloud.serialization.cloudpickle.loads(fh.read())
         return data
 
     def delete(self,filename):
