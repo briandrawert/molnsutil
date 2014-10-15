@@ -66,7 +66,7 @@ class LocalStorage():
 	
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
-            fh.write(cloud.serialization.cloudpickle.dumps(data))
+            cloud.serialization.cloudpickle.dump(data,fh)
 
     def get(self, filename):
         with open(self.folder_name+"/"+filename, 'rb') as fh:
@@ -85,7 +85,7 @@ class SharedStorage():
 	
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
-            cloud.serialization.cloudpickle.dumps(data,fh)
+            cloud.serialization.cloudpickle.dump(data,fh)
 
     def get(self, filename):
         with open(self.folder_name+"/"+filename, 'rb') as fh:
