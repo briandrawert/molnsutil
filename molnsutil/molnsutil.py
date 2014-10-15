@@ -517,7 +517,7 @@ class DistributedEnsemble():
                 self.add_realizations( number_of_realizations - self.number_of_realizations, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode, cache_results=cache_results)
 
             if chunk_size is None:
-                chunk_size = self._determine_chunk_size(len(self.number_of_realizations))
+                chunk_size = self._determine_chunk_size(self.number_of_realizations)
             if verbose:
                 print "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(self.number_of_realizations*len(self.parameters), chunk_size)
             else:
@@ -525,7 +525,7 @@ class DistributedEnsemble():
             
                 
             # chunks per parameter
-            num_chunks = int(math.ceil(len(self.number_of_realizations)/float(chunk_size)))
+            num_chunks = int(math.ceil(self.number_of_realizations/float(chunk_size)))
             # total chunks
             pchunks = chunks*len(self.parameters)
             num_pchunks = num_chunks*len(self.parameters)
