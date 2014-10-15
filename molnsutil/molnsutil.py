@@ -66,11 +66,11 @@ class LocalStorage():
 	
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
-            fh.write(pickle.dumps(data))
+            fh.write(cloud.serialization.cloudpickle.dumps(data))
 
     def get(self, filename):
         with open(self.folder_name+"/"+filename, 'rb') as fh:
-            data = pickle.load(fh)
+            data = cloud.serialization.cloudpickle.load(fh)
         return data
 
     def delete(self,filename):
@@ -85,11 +85,11 @@ class SharedStorage():
 	
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
-            fh.write(pickle.dumps(data))
+            cloud.serialization.cloudpickle.dumps(data,fh)
 
     def get(self, filename):
         with open(self.folder_name+"/"+filename, 'rb') as fh:
-            data = pickle.load(fh)
+            data = cloud.serialization.cloudpickle.load(fh)
         return data
 
     def delete(self,filename):
@@ -261,11 +261,11 @@ class PersistentStorage():
         self.bucket = bucket
 
     def put(self, name, data):
-        self.provider.put(name, pickle.dumps(data))
+        self.provider.put(name, cloud.serialization.cloudpickle.dumps(data))
     
     
     def get(self, name, validate=False):
-        return pickle.loads(self.provider.get(name, validate))
+        return cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
     
     def delete(self, name):
         """ Delete an object. """
