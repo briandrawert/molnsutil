@@ -706,8 +706,8 @@ class DistributedEnsemble():
 
     def _determine_chunk_size(self, number_of_realizations):
         """ Determine a optimal chunk size. """
-        num_chunks = len(self.c.ids())
-        return round(number_of_realizations/float(num_chunks))
+        num_proc = len(self.c.ids)
+        return max(1, round(number_of_realizations/float(num_proc)))
 
     # TODO: take a hard look at the following functions
     def rebalance_chunk_list(self):
@@ -744,26 +744,30 @@ class ParameterSweep(DistributedEnsemble):
         self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
         self.number_of_realizations = 0
         self.seed_base = int(uuid.uuid4())
-        self.result_list = []
+        self.result_list = {}
+        self.parameters = []
         # process the parameters
         if type(parameters) is type({}):
-            #TODO
             raise MolnsUtilException("TODO")
+            #TODO
+            pkeys = parameters.keys()
+            for i,key in enumerate(pkeys):
+        
         elif type(parameters) is type([]):
             self.parameters = parameters
         else:
             raise MolnsUtilException("parameters must be a dict.")
-        self.parameters = []
-        pkeys
 
         # Set the Ipython.parallel client
         self._update_client(client)
 
     def _determine_chunk_size(self, number_of_realizations):
         """ Determine a optimal chunk size. """
-        num_chunks = len(self.c.ids())
-        #TODO, update this to take parameters into account
-        return round(number_of_realizations/float(num_chunks))
+        num_procs = len(self.c.ids)
+        num_params = len(self.parameters)
+        if num_params >= num_procs:
+            return number_of_realizations
+        return max(1, math.ceil(number_of_realizations*num_params/float(num_procs)))
 
     #--------------------------
 
