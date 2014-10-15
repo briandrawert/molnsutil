@@ -354,7 +354,7 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
             mapres = mapper(result)
             res = aggregator(mapres, res)
             num_processed +=1
-        except Exception as e:
+        except TypeError as e:
             notes = "Error running mapper and aggregator, caught {0}: {1}\n".format(type(e),e)
             notes += "type(mapper) = {0}\n".format(type(mapper))
             notes += "type(aggregator) = {0}\n".format(type(aggregator))
