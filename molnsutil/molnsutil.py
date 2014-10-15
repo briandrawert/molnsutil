@@ -751,7 +751,23 @@ class ParameterSweep(DistributedEnsemble):
             raise MolnsUtilException("TODO")
             #TODO
             pkeys = parameters.keys()
+            pkey_lens = [0]*len(pkeys)
+            pkey_ndxs = [0]*len(pkeys)
             for i,key in enumerate(pkeys):
+                pkey_lens[i] = len(parameters[key])
+            num_params = sum(pkey_lens)
+            for _ in range(num_params):
+                param = {}
+                for i,key in enumerate(pkeys):
+                    param[key] = parameters[key][pkey_ndxs[i]]
+                self.parameters.append(param)
+                # incriment indexes
+                for i,key in enumerate(pkeys):
+                    pkey_ndxs[i] += 1
+                    if pkey_ndxs[i] >= pkey_lens[i]:
+                        pkey_ndxs[i] = 0
+                    else:
+                        break
         
         elif type(parameters) is type([]):
             self.parameters = parameters
