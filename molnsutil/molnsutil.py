@@ -335,7 +335,7 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
         aggregator = builtin_aggregator_list_append
     # Create the model
     try:
-        model_class_cls = pickle.loads(model_class)
+        model_class_cls = cloud.serialization.cloudpickle.loads(model_class)
         if parameters is not None:
             model = model_class_cls(**parameters)
         else:
@@ -383,7 +383,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         raise MolnsUtilException("Unknown storage type '{0}'".format(storage_mode))
     # Create the model
     try:
-        model_class_cls = pickle.loads(model_class)
+        model_class_cls = cloud.serialization.cloudpickle.loads(model_class)
         if parameters is not None:
             model = model_class_cls(**parameters)
         else:
