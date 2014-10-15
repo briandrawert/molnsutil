@@ -407,13 +407,9 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
             filename = str(uuid.uuid1())
             storage.put(filename, result)
             filenames.append(filename)
-        except TypeError as e:
-            notes = "Error running mapper and aggregator, caught {0}: {1}\n".format(type(e),e)
-            notes += "type(mapper) = {0}\n".format(type(mapper))
-            notes += "type(aggregator) = {0}\n".format(type(aggregator))
-            notes +=  "dir={0}\n".format(dir())
-            raise MolnsUtilException(notes)
-
+        except:
+            raise
+    
     return {'filenames':filenames, 'param_set_id':param_set_id}
 
 def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_results=False):
@@ -465,8 +461,13 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
             mapres = mapper(result)
             res = aggregator(mapres, res)
             num_processed +=1
-        except Exception as e:
-            raise
+        except TypeError as e:
+            notes = "Error running mapper and aggregator, caught {0}: {1}\n".format(type(e),e)
+            notes += "type(mapper) = {0}\n".format(type(mapper))
+            notes += "type(aggregator) = {0}\n".format(type(aggregator))
+            notes +=  "dir={0}\n".format(dir())
+            raise MolnsUtilException(notes)
+
     return {'result':res, 'param_set_id':param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
 
     #return res
