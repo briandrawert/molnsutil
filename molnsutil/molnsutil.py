@@ -470,7 +470,7 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
             notes +=  "dir={0}\n".format(dir())
             raise MolnsUtilException(notes)
 
-    return {'result':res, 'param_set_id':param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
+    return {'result':res, 'param_set_id':param_set_id, 'num_sucessful':num_processed, 'num_failed':len(results)-num_processed}
 
     #return res
 
