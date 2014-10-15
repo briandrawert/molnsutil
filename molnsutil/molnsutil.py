@@ -447,14 +447,14 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
                 result = ss.get(filename)
                 if cache_results:
                     ls.put(filename, result)
-            except:
+            except Exception as e:
                 enotes += "In fetching from shared store, caught  {0}: {1}\n".format(type(e),e)
         if result is None:
             try:
                 result = ps.get(filename)
                 if cache_results:
                     ls.put(filename, result)
-            except:
+            except Exception as e:
                 enotes += "In fetching from global store, caught  {0}: {1}\n".format(type(e),e)
         if result is None:
             notes = "Error could not find file '{0}' in storage\n".format(filename)
