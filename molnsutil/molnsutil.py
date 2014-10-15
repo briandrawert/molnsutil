@@ -509,10 +509,6 @@ class DistributedEnsemble():
     def run(self, mapper, aggregator=None, reducer=None, number_of_realizations=None, chunk_size=None, verbose=True, progress_bar=True, store_realizations=True, storage_mode="Shared", cache_results=False):
         """ Main entry point """
         if store_realizations:
-            if verbose:
-                print "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(len(self.result_list), chunk_size)
-            else:
-                progress_bar=False
             # Do we have enough trajectores yet?
             if number_of_realizations is None and self.number_of_realizations == 0:
                 raise MolnsUtilException("number_of_realizations is zero")
@@ -520,10 +516,16 @@ class DistributedEnsemble():
             if self.number_of_realizations < number_of_realizations:
                 self.add_realizations( number_of_realizations - self.number_of_realizations, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode, cache_results=cache_results)
 
-            # chunks per parameter
             if chunk_size is None:
-                chunk_size = self._determine_chunk_size(len(self.result_list))
-            num_chunks = int(math.ceil(len(self.result_list)/float(chunk_size)))
+                chunk_size = self._determine_chunk_size(len(self.number_of_realizations))
+            if verbose:
+                print "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(self.number_of_realizations*len(self.parameters), chunk_size)
+            else:
+                progress_bar=False
+            
+                
+            # chunks per parameter
+            num_chunks = int(math.ceil(len(self.number_of_realizations)/float(chunk_size)))
             # total chunks
             pchunks = chunks*len(self.parameters)
             num_pchunks = num_chunks*len(self.parameters)
@@ -538,13 +540,13 @@ class DistributedEnsemble():
             results = self.lv.map_async(map_and_aggregate, presult_list, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
         else:
             # If we don't store the realizations (or use the stored ones)
+            if chunk_size is None:
+                chunk_size = self._determine_chunk_size(number_of_realizations)
             if not verbose:
                 progress_bar=False
             else:
                 print "Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})".format(number_of_realizations,chunk_size)
-            if chunk_size is None:
-                chunk_size = self._determine_chunk_size(number_of_realizations)
-                
+            
             # chunks per parameter
             num_chunks = int(math.ceil(number_of_realizations/float(chunk_size)))
             chunks = [chunk_size]*(num_chunks-1)
@@ -670,15 +672,15 @@ class DistributedEnsemble():
     
     #-------- Convience functions with builtin mappers/reducers  ------------------
 
-    def mean_variance(self, mapper=None, number_of_realizations=None, verbose=True):
+    def mean_variance(self, mapper=None, number_of_realizations=None, verbose=True, store_realizations=True, storage_mode="Shared", cache_results=False):
         """ Compute the mean and variance (second order central moment) of the function g(X) based on number_of_realizations realizations
             in the ensemble. """
-        return self.run(mapper=mapper, aggregator=builtin_aggregator_sum_and_sum2, reducer=builtin_reducer_mean_variance, number_of_realizations=number_of_realizations, verbose=verbose)
+        return self.run(mapper=mapper, aggregator=builtin_aggregator_sum_and_sum2, reducer=builtin_reducer_mean_variance, number_of_realizations=number_of_realizations, verbose=verbose, store_realizations=store_realizations, storage_mode=storage_mode, cache_results=cache_results)
 
-    def mean(self, mapper=None, number_of_realizations=None, verbose=True):
+    def mean(self, mapper=None, number_of_realizations=None, verbose=True, store_realizations=True, storage_mode="Shared", cache_results=False):
         """ Compute the mean of the function g(X) based on number_of_realizations realizations
             in the ensemble. It has to make sense to say g(result1)+g(result2). """
-        return self.run(mapper=mapper, aggregator=builtin_aggregator_add, reducer=builtin_reducer_mean, number_of_realizations=number_of_realizations, verbose=verbose)
+        return self.run(mapper=mapper, aggregator=builtin_aggregator_add, reducer=builtin_reducer_mean, number_of_realizations=number_of_realizations, verbose=verbose, store_realizations=store_realizations, storage_mode=storage_mode, cache_results=cache_results)
    
 
     def moment(self, g=None, order=1, number_of_realizations=None):
