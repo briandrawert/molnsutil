@@ -355,7 +355,11 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
             res = aggregator(mapres, res)
             num_processed +=1
         except Exception as e:
-            raise
+            notes = "Error running mapper and aggregator, caught {0}: {1}\n".format(type(e),e)
+            notes += "type(mapper) = {0}\n".format(type(mapper))
+            notes += "type(aggregator) = {0}\n".format(type(aggregator))
+            notes +=  "dir={0}\n".format(dir())
+            raise MolnsUtilException(notes)
     return {'result':res, 'param_set_id':param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
 
 def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_trajectories, storage_mode="Shared"):
