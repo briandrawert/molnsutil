@@ -290,7 +290,7 @@ def builtin_aggregator_list_append(new_result, aggregated_results=None, paramete
 def builtin_aggregator_add(new_result, aggregated_results=None, parameters=None):
     """ chunk aggregator for the mean function. """
     if aggregated_results is None:
-        return (a, 1)
+        return (new_result, 1)
     return (aggregated_results[0]+new_result, aggregated_results[1]+1)
 
 def builtin_aggregator_sum_and_sum2(new_result, aggregated_results=None, parameters=None):
