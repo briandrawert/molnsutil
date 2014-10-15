@@ -25,6 +25,7 @@ from boto.s3.key import Key
 import uuid
 import math
 import dill
+import cloud
 
 import swiftclient.client
 import IPython.parallel
@@ -334,7 +335,7 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
         aggregator = builtin_aggregator_list_append
     # Create the model
     try:
-        model_class_cls = dill.loads(model_class)
+        model_class_cls = pickle.loads(model_class)
         if parameters is not None:
             model = model_class_cls(**parameters)
         else:
@@ -382,7 +383,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         raise MolnsUtilException("Unknown storage type '{0}'".format(storage_mode))
     # Create the model
     try:
-        model_class_cls = dill.loads(model_class)
+        model_class_cls = pickle.loads(model_class)
         if parameters is not None:
             model = model_class_cls(**parameters)
         else:
@@ -468,7 +469,7 @@ class DistributedEnsemble():
     def __init__(self, model_class=None, parameters=None, client=None):
         """ Constructor """
         self.my_class_name = 'DistributedEnsemble'
-        self.model_class = dill.dumps(model_class)
+        self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
         self.parameters = [parameters]
         self.number_of_realizations = 0
         self.seed_base = int(uuid.uuid4())
@@ -738,7 +739,7 @@ class ParameterSweep(DistributedEnsemble):
             If it is a list, where each element of the list is a dict
             """
         self.my_class_name = 'ParameterSweep'
-        self.model_class = model_class
+        self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
         self.number_of_realizations = 0
         self.seed_base = int(uuid.uuid4())
         self.result_list = []
