@@ -527,7 +527,7 @@ class DistributedEnsemble():
             # chunks per parameter
             num_chunks = int(math.ceil(self.number_of_realizations/float(chunk_size)))
             chunks = [chunk_size]*(num_chunks-1)
-            chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
+            chunks.append(self.number_of_realizations-chunk_size*(num_chunks-1))
             # total chunks
             pchunks = chunks*len(self.parameters)
             num_pchunks = num_chunks*len(self.parameters)
