@@ -62,7 +62,7 @@ class LocalStorage():
         the ephemeral storage. """
     
     def __init__(self):
-	self.folder_name = "/home/ubuntu/localarea"
+        self.folder_name = "/home/ubuntu/localarea"
 	
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
@@ -81,7 +81,7 @@ class SharedStorage():
         the sshfs mounted storage on the controller. """
     
     def __init__(self):
-	self.folder_name = "/home/ubuntu/shared"
+        self.folder_name = "/home/ubuntu/shared"
 	
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
