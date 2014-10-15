@@ -378,6 +378,8 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         storage  = SharedStorage()
     elif storage_mode=="Persistent":
         storage = PersistentStorage()
+    else:
+        raise MolnsUtilException("Unknown storage type '{0}'".format(storage_mode))
     # Create the model
     try:
         model_class_cls = dill.loads(model_class)
@@ -417,7 +419,6 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
         postprocessing jobs may run faster.
         
         """
-    
     import dill
     import numpy
     from molnsutil import PersistentStorage, LocalStorage, SharedStorage
@@ -527,11 +528,13 @@ class DistributedEnsemble():
             num_pchunks = num_chunks*len(self.parameters)
             pparams = []
             param_set_ids = []
+            presult_list = []
             for id, param in enumerate(self.parameters):
                 param_set_ids.extend( [id]*num_chunks )
                 pparams.extend( [param]*num_chunks )
+                presult_list.extend(self.result_list[id])
             # Run mapper & aggregator
-            results = self.lv.map_async(map_and_aggregate, self.result_list, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
+            results = self.lv.map_async(map_and_aggregate, presult_list, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
         else:
             # If we don't store the realizations (or use the stored ones)
             if not verbose:
