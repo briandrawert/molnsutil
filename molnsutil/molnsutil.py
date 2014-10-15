@@ -436,10 +436,11 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
     res = None
     result = None
     for i,filename in enumerate(results):
+        enotes = ''
         try:
             result = ls.get(filename)
-        except:
-            pass
+        except Exception as e:
+            enotes += "In fetching from local store, caught  {0}: {1}\n".format(type(e),e)
         
         if result is None:
             try:
@@ -447,24 +448,25 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
                 if cache_results:
                     ls.put(filename, result)
             except:
-                pass
-        
+                enotes += "In fetching from shared store, caught  {0}: {1}\n".format(type(e),e)
         if result is None:
             try:
                 result = ps.get(filename)
                 if cache_results:
                     ls.put(filename, result)
             except:
-                pass
-        
+                enotes += "In fetching from global store, caught  {0}: {1}\n".format(type(e),e)
+        if result is None:
+            notes = "Error could not find file '{0}' in storage\n".format(filename)
+            notes += enotes
+            raise MolnsUtilException(notes)
+
         try:
             mapres = mapper(result)
             res = aggregator(mapres, res)
             num_processed +=1
-        except TypeError as e:
+        except Exception as e:
             notes = "Error running mapper and aggregator, caught {0}: {1}\n".format(type(e),e)
-            notes += "type(mapper) = {0}\n".format(type(mapper))
-            notes += "type(aggregator) = {0}\n".format(type(aggregator))
             notes +=  "dir={0}\n".format(dir())
             raise MolnsUtilException(notes)
 
