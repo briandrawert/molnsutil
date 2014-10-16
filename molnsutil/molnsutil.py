@@ -684,7 +684,7 @@ class DistributedEnsemble():
             param_set_id = ret['param_set_id']
             if param_set_id not in self.result_list:
                 self.result_list[param_set_id] = []
-            self.result_list[param_set_id].append(r)
+            self.result_list[param_set_id].extend(r)
             if progress_bar:
                 display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(i+1)/len(results))))
         
