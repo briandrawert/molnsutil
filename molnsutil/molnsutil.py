@@ -695,15 +695,15 @@ class DistributedEnsemble():
     
     #-------- Convience functions with builtin mappers/reducers  ------------------
 
-    def mean_variance(self, mapper=None, number_of_realizations=None, verbose=True, store_realizations=True, storage_mode="Shared", cache_results=False):
+    def mean_variance(self, mapper=None, number_of_realizations=None, chunk_size=None, verbose=True, store_realizations=True, storage_mode="Shared", cache_results=False):
         """ Compute the mean and variance (second order central moment) of the function g(X) based on number_of_realizations realizations
             in the ensemble. """
-        return self.run(mapper=mapper, aggregator=builtin_aggregator_sum_and_sum2, reducer=builtin_reducer_mean_variance, number_of_realizations=number_of_realizations, verbose=verbose, store_realizations=store_realizations, storage_mode=storage_mode, cache_results=cache_results)
+        return self.run(mapper=mapper, aggregator=builtin_aggregator_sum_and_sum2, reducer=builtin_reducer_mean_variance, number_of_realizations=number_of_realizations, chunk_size=chunk_size, verbose=verbose, store_realizations=store_realizations, storage_mode=storage_mode, cache_results=cache_results)
 
-    def mean(self, mapper=None, number_of_realizations=None, verbose=True, store_realizations=True, storage_mode="Shared", cache_results=False):
+    def mean(self, mapper=None, number_of_realizations=None, chunk_size=None, verbose=True, store_realizations=True, storage_mode="Shared", cache_results=False):
         """ Compute the mean of the function g(X) based on number_of_realizations realizations
             in the ensemble. It has to make sense to say g(result1)+g(result2). """
-        return self.run(mapper=mapper, aggregator=builtin_aggregator_add, reducer=builtin_reducer_mean, number_of_realizations=number_of_realizations, verbose=verbose, store_realizations=store_realizations, storage_mode=storage_mode, cache_results=cache_results)
+        return self.run(mapper=mapper, aggregator=builtin_aggregator_add, reducer=builtin_reducer_mean, number_of_realizations=number_of_realizations, chunk_size=chunk_size, verbose=verbose, store_realizations=store_realizations, storage_mode=storage_mode, cache_results=cache_results)
    
 
     def moment(self, g=None, order=1, number_of_realizations=None):
