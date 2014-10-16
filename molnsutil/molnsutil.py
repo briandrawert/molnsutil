@@ -727,7 +727,7 @@ class DistributedEnsemble():
     def _determine_chunk_size(self, number_of_realizations):
         """ Determine a optimal chunk size. """
         num_proc = len(self.c.ids)
-        return max(1, round(number_of_realizations/float(num_proc)))
+        return int(max(1, round(number_of_realizations/float(num_proc))))
 
     # TODO: take a hard look at the following functions
     def rebalance_chunk_list(self):
@@ -803,7 +803,7 @@ class ParameterSweep(DistributedEnsemble):
         num_params = len(self.parameters)
         if num_params >= num_procs:
             return number_of_realizations
-        return max(1, math.ceil(number_of_realizations*num_params/float(num_procs)))
+        return int(max(1, math.ceil(number_of_realizations*num_params/float(num_procs))))
 
     #--------------------------
 
