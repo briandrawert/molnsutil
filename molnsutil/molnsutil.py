@@ -309,7 +309,7 @@ def builtin_reducer_mean(result_list, parameters=None):
     n = 0.0
     for r in result_list:
         sum += r[0]
-        n += r[2]
+        n += r[1]
     return sum/n
 
 def builtin_reducer_mean_variance(result_list, parameters=None):
@@ -556,10 +556,10 @@ class DistributedEnsemble():
             #    raise MolnsUtilException(" len(presult_list) != len(param_set_ids) ")
             #if len(presult_list) != len():
             #def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_results=False):
-            print "len(presult_list) = {0}".format(len(presult_list))
-            print "len(param_set_ids) = {0}".format(len(param_set_ids))
-            print "num_pchunks = {0} num_chunks={1} len(self.parameters)={2}".format(num_pchunks, num_chunks, len(self.parameters))
-            print "presult_list = {0}".format(presult_list)
+            #print "len(presult_list) = {0}".format(len(presult_list))
+            #print "len(param_set_ids) = {0}".format(len(param_set_ids))
+            #print "num_pchunks = {0} num_chunks={1} len(self.parameters)={2}".format(num_pchunks, num_chunks, len(self.parameters))
+            #print "presult_list = {0}".format(presult_list)
             results = self.lv.map_async(map_and_aggregate, presult_list, param_set_ids, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
         else:
             # If we don't store the realizations (or use the stored ones)
@@ -617,7 +617,7 @@ class DistributedEnsemble():
                 display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(i+1)/len(results))))
 
         if verbose:
-            print "Running reducer on mapped and aggregated results (size={0})".format(len(mapped_results))
+            print "Running reducer on mapped and aggregated results (size={0})".format(len(mapped_results[0]))
         if reducer is None:
             reducer = builtin_reducer_default
         # Run reducer
