@@ -536,7 +536,6 @@ class DistributedEnsemble():
             else:
                 progress_bar=False
             
-                
             # chunks per parameter
             num_chunks = int(math.ceil(self.number_of_realizations/float(chunk_size)))
             chunks = [chunk_size]*(num_chunks-1)
@@ -557,6 +556,10 @@ class DistributedEnsemble():
             #    raise MolnsUtilException(" len(presult_list) != len(param_set_ids) ")
             #if len(presult_list) != len():
             #def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_results=False):
+            print "len(presult_list) = {0}".foramt(len(presult_list))
+            print "len(param_set_ids) = {0}".format(len(param_set_ids))
+            print "num_pchunks = {0} num_chunks={1} len(self.parameters)={2}".format(num_pchunks, num_chunks, len(self.parameters))
+            print "presult_list = {0}".format(presult_list)
             results = self.lv.map_async(map_and_aggregate, presult_list, param_set_ids, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
         else:
             # If we don't store the realizations (or use the stored ones)
