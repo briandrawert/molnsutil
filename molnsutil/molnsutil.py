@@ -550,8 +550,12 @@ class DistributedEnsemble():
             for id, param in enumerate(self.parameters):
                 param_set_ids.extend( [id]*num_chunks )
                 pparams.extend( [param]*num_chunks )
-                presult_list.extend(self.result_list[id])
+                for i in range(num_chunks):
+                    presult_list.append( self.result_list[id][i*chunk_size:(i+1)*chunk_size] )
             # Run mapper & aggregator
+            #if len(presult_list) != len(param_set_ids):
+            #    raise MolnsUtilException(" len(presult_list) != len(param_set_ids) ")
+            #if len(presult_list) != len():
             #def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_results=False):
             results = self.lv.map_async(map_and_aggregate, presult_list, param_set_ids, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
         else:
