@@ -584,7 +584,7 @@ class DistributedEnsemble():
                 pparams.extend( [param]*num_chunks )
             
             seed_list = []
-            for _ in range(len(parameters)):
+            for _ in range(len(self.parameters)):
                 #need to do it this way cause the number of run per chunk might not be even
                 seed_list.extend(range(self.seed_base, self.seed_base+number_of_realizations, chunk_size))
                 self.seed_base += number_of_realizations
