@@ -27,6 +27,8 @@ import math
 import dill
 import cloud
 
+import random
+
 import swiftclient.client
 import IPython.parallel
 import uuid
@@ -373,6 +375,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         Returns: a list of filenames for the serialized result objects.
         
         """
+    
     import pyurdme
     from pyurdme.nsmsolver import NSMSolver
     import sys
@@ -485,7 +488,8 @@ class DistributedEnsemble():
         self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
         self.parameters = [parameters]
         self.number_of_realizations = 0
-        self.seed_base = int(uuid.uuid4())
+        #self.seed_base = int(uuid.uuid4())
+        self.seed_base = random.randint(0,1e7)
         # A chunk list
         self.result_list = {}
         # Set the Ipython.parallel client
