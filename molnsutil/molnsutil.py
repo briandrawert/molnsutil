@@ -82,16 +82,23 @@ class SharedStorage():
     """ This class provides an abstraction for storing and reading objects on/from
         the sshfs mounted storage on the controller. """
     
-    def __init__(self):
+    def __init__(self, serialization_method="cloudpickle"):
         self.folder_name = "/home/ubuntu/shared"
+        self.serialization_method = serialization_method
 	
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
-            cloud.serialization.cloudpickle.dump(data,fh)
+            if self.serialization_method == "cloudpickle":
+                cloud.serialization.cloudpickle.dump(data,fh)
+            elif self.serialization_method == "json":
+                json.dump(data,fh)
 
     def get(self, filename):
         with open(self.folder_name+"/"+filename, 'rb') as fh:
-            data = cloud.serialization.cloudpickle.loads(fh.read())
+            if self.serialization_method == "cloudpickle":
+                data = cloud.serialization.cloudpickle.loads(fh.read())
+            elif self.serialization_method == "json":
+                data = json.loads(fh.read())
         return data
 
     def delete(self,filename):
