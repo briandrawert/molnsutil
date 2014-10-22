@@ -589,7 +589,7 @@ class DistributedEnsemble():
                 seed_list.extend(range(self.seed_base, self.seed_base+number_of_realizations, chunk_size))
                 self.seed_base += number_of_realizations
             #def run_ensemble_map_and_aggregate(model_class, parameters, seed_base, number_of_trajectories, mapper, aggregator=None):
-            results  = self.lv.map_async(run_ensemble_map_and_aggregate, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [mapper]*num_pchunks, [agggregator]*num_pchunks)
+            results  = self.lv.map_async(run_ensemble_map_and_aggregate, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [mapper]*num_pchunks, [aggregator]*num_pchunks)
 
     
         if progress_bar:
