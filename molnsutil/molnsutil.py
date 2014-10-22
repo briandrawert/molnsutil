@@ -631,7 +631,7 @@ class DistributedEnsemble():
         if reducer is None:
             reducer = builtin_reducer_default
         # Run reducer
-        return self.run_reducer(mapped_results)
+        return self.run_reducer(reducer, mapped_results)
 
 
 
