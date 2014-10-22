@@ -486,11 +486,20 @@ class DistributedEnsemble():
         self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
         self.parameters = [parameters]
         self.number_of_realizations = 0
-        self.seed_base = int(uuid.uuid4())
+        self.seed_base = self.generate_seed_base()
         # A chunk list
         self.result_list = {}
         # Set the Ipython.parallel client
         self._update_client(client)
+    
+    def generate_seed_base(self):
+        x = int(uuid.uuid4())
+        if x.bit_length() >= 64:
+            x = x & ((1<<64)-1)
+            if x > (1 << 63) -1:
+                x -= 1 << 64
+        return x
+    
 
     #--------------------------
     def save_state(self, name):
@@ -767,7 +776,7 @@ class ParameterSweep(DistributedEnsemble):
         self.my_class_name = 'ParameterSweep'
         self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
         self.number_of_realizations = 0
-        self.seed_base = int(uuid.uuid4())
+        self.seed_base = self.generate_seed_base()
         self.result_list = {}
         self.parameters = []
         # process the parameters
