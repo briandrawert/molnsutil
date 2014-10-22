@@ -348,6 +348,7 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
     # Run the solver
     solver = NSMSolver(model)
     res = None
+    num_processed = 0
     for i in range(number_of_trajectories):
         try:
             result = solver.run(seed=seed_base+i)
