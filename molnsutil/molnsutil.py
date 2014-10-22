@@ -493,13 +493,13 @@ class DistributedEnsemble():
         self._update_client(client)
     
     def generate_seed_base(self):
+        """ Create a random number and truncate to 64 bits. """
         x = int(uuid.uuid4())
         if x.bit_length() >= 64:
             x = x & ((1<<64)-1)
             if x > (1 << 63) -1:
                 x -= 1 << 64
         return x
-    
 
     #--------------------------
     def save_state(self, name):
@@ -631,10 +631,14 @@ class DistributedEnsemble():
         if reducer is None:
             reducer = builtin_reducer_default
         # Run reducer
-        ret = ParameterSweepResultList()
-        for param_set_id, param in enumerate(self.parameters):
-            ret.append(ParameterSweepResult(reducer(mapped_results[param_set_id], parameters=param), parameters=param))
-        return ret
+        return self.run_reducer(mapped_results)
+
+
+
+    def run_reducer(self, reducer, mapped_results):
+        """ Inside the run() function, apply the reducer to all of the map'ped-aggregated result values. """
+        return reducer(mapped_results[0], parameters=self.parameters[0])
+
 
 
     
@@ -703,7 +707,7 @@ class DistributedEnsemble():
     
 
     
-    #-------- Convience functions with builtin mappers/reducers  ------------------
+    #-------- Convenience functions with builtin mappers/reducers  ------------------
 
     def mean_variance(self, mapper=None, number_of_realizations=None, chunk_size=None, verbose=True, store_realizations=True, storage_mode="Shared", cache_results=False):
         """ Compute the mean and variance (second order central moment) of the function g(X) based on number_of_realizations realizations
@@ -781,8 +785,6 @@ class ParameterSweep(DistributedEnsemble):
         self.parameters = []
         # process the parameters
         if type(parameters) is type({}):
-            raise MolnsUtilException("TODO")
-            #TODO
             pkeys = parameters.keys()
             pkey_lens = [0]*len(pkeys)
             pkey_ndxs = [0]*len(pkeys)
@@ -818,6 +820,12 @@ class ParameterSweep(DistributedEnsemble):
             return number_of_realizations
         return int(max(1, math.ceil(number_of_realizations*num_params/float(num_procs))))
 
+    def run_reducer(self, reducer, mapped_results):
+        """ Inside the run() function, apply the reducer to all of the map'ped-aggregated result values. """
+        ret = ParameterSweepResultList()
+        for param_set_id, param in enumerate(self.parameters):
+            ret.append(ParameterSweepResult(reducer(mapped_results[param_set_id], parameters=param), parameters=param))
+        return ret
     #--------------------------
 
 
