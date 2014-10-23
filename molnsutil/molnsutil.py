@@ -841,8 +841,11 @@ class ParameterSweepResult():
         return "{0} => {1}".format(self.parameters, self.result)
 
 class ParameterSweepResultList(list):
-    """TODO"""
-    pass
+    def __str__(self):
+        l = []
+        for i in self:
+            l.append(str(i))
+        return "[{0}]".format(", ".join(l))
 
 
 
