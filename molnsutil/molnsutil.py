@@ -110,13 +110,9 @@ class S3Provider():
             bucket = self.connection.create_bucket(self.bucket_name)
         else:
             self.bucket_name = bucket_name
-            try:
-                bucket = self.connection.get_bucket(bucket_name)
-            except:
-                try:
-                    bucket = self.connection.create_bucket(bucket_name)
-                except Exception, e:
-                    raise MolnsUtilStorageException("Failed to create/set bucket in the object store."+str(e))
+            bucket = self.connection.lookup(bucket_name)
+            if bucket is None:
+                bucket = self.connection.create_bucket(bucket_name)
             self.bucket = bucket
 
     def create_bucket(self,bucket_name):
