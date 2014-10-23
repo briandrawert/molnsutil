@@ -663,7 +663,7 @@ class DistributedEnsemble():
         
         self.number_of_realizations += number_of_realizations
         
-        num_chunks = int(math.ceil(number_of_realizations/chunk_size))
+        num_chunks = int(math.ceil(number_of_realizations/float(chunk_size)))
         chunks = [chunk_size]*(num_chunks-1)
         chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
         # total chunks
