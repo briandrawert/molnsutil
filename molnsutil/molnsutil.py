@@ -810,7 +810,7 @@ class ParameterSweep(DistributedEnsemble):
             raise MolnsUtilException("parameters must be a dict.")
 
         # Set the Ipython.parallel client
-        self._update_client(client)
+        self._update_client()
 
     def _determine_chunk_size(self, number_of_realizations):
         """ Determine a optimal chunk size. """
