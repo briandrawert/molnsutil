@@ -380,7 +380,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     import uuid
     from molnsutil import PersistentStorage, LocalStorage, SharedStorage
     
-    if storage_mode is None or storage_mode=="Shared":
+    if storage_mode=="Shared":
         storage  = SharedStorage()
     elif storage_mode=="Persistent":
         storage = PersistentStorage()
@@ -656,7 +656,10 @@ class DistributedEnsemble():
         if not verbose:
             progress_bar=False
         else:
-            print "Generating {0} realizations of the model (chunk size={1})".format(number_of_realizations,chunk_size)
+            if len(self.parameters) > 1:
+                print "Generating {0} realizations of the model at {1} parameter points (chunk size={1})".format(number_of_realizations, len(self.parameters), chunk_size)
+            else:
+                print "Generating {0} realizations of the model (chunk size={1})".format(number_of_realizations,chunk_size)
         
         self.number_of_realizations += number_of_realizations
         
@@ -677,11 +680,14 @@ class DistributedEnsemble():
             #need to do it this way cause the number of run per chunk might not be even
             seed_list.extend(range(self.seed_base, self.seed_base+number_of_realizations, chunk_size))
             self.seed_base += number_of_realizations
-        
+        print "[self.model_class]*num_pchunks",len([self.model_class]*num_pchunks)
+        print "pparams",len(pparams)
+        print "param_set_ids",len(param_set_ids)
+        print "seed_list",len(seed_list)
+        print "pchunks",len(pchunks)
+        print "[storage_mode]*num_pchunks",len([storage_mode]*num_pchunks)
         results  = self.lv.map_async(run_ensemble, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [storage_mode]*num_pchunks)
-            #TODO: results here should be a class 'RemoteResults' which has model parameters and location
         
-        # TODO: Refactor this so it can be reused by other methods.
         if progress_bar:
             # This should be factored out somehow.
             divid = str(uuid.uuid4())
