@@ -680,12 +680,6 @@ class DistributedEnsemble():
             #need to do it this way cause the number of run per chunk might not be even
             seed_list.extend(range(self.seed_base, self.seed_base+number_of_realizations, chunk_size))
             self.seed_base += number_of_realizations
-        print "[self.model_class]*num_pchunks",len([self.model_class]*num_pchunks)
-        print "pparams",len(pparams)
-        print "param_set_ids",len(param_set_ids)
-        print "seed_list",len(seed_list)
-        print "pchunks",len(pchunks)
-        print "[storage_mode]*num_pchunks",len([storage_mode]*num_pchunks)
         results  = self.lv.map_async(run_ensemble, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [storage_mode]*num_pchunks)
         
         if progress_bar:
@@ -842,6 +836,9 @@ class ParameterSweepResult():
     def __init__(self, result, parameters):
         self.result = result
         self.parameters = parameters
+
+    def __str__(self):
+        return "{0} => {1}".format(self.parameters, self.result)
 
 class ParameterSweepResultList(list):
     """TODO"""
