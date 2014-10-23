@@ -657,7 +657,7 @@ class DistributedEnsemble():
             progress_bar=False
         else:
             if len(self.parameters) > 1:
-                print "Generating {0} realizations of the model at {1} parameter points (chunk size={1})".format(number_of_realizations, len(self.parameters), chunk_size)
+                print "Generating {0} realizations of the model at {1} parameter points (chunk size={2})".format(number_of_realizations, len(self.parameters), chunk_size)
             else:
                 print "Generating {0} realizations of the model (chunk size={1})".format(number_of_realizations,chunk_size)
         
