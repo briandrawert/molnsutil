@@ -380,7 +380,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     import uuid
     from molnsutil import PersistentStorage, LocalStorage, SharedStorage
     
-    if storage_mode=="Shared":
+    if storage_mode is None or storage_mode=="Shared":
         storage  = SharedStorage()
     elif storage_mode=="Persistent":
         storage = PersistentStorage()
