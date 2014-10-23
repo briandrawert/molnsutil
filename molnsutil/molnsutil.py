@@ -537,7 +537,7 @@ class DistributedEnsemble():
                 raise MolnsUtilException("number_of_realizations is zero")
             # Run simulations
             if self.number_of_realizations < number_of_realizations:
-                self.add_realizations( number_of_realizations - self.number_of_realizations, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode, cache_results=cache_results)
+                self.add_realizations( number_of_realizations - self.number_of_realizations, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode)
 
             if chunk_size is None:
                 chunk_size = self._determine_chunk_size(self.number_of_realizations)
