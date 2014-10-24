@@ -99,13 +99,13 @@ class SharedStorage():
 class S3Provider():
     def __init__(self, bucket_name):
         self.connection = S3Connection(is_secure=False,
-                                 calling_format='boto.s3.connection.OrdinaryCallingFormat',
+                                 #calling_format='boto.s3.connection.OrdinaryCallingFormat',
                                  **s3config['credentials']
                                  )
         self.set_bucket(bucket_name)
     
-    def set_bucket(self,bucket_name=None):
-        if not bucket_name:
+    def set_bucket(self, bucket_name=None):
+        if bucket_name is None:
             self.bucket_name = "molns_bucket_{0}".format(str(uuid.uuid1()))
             bucket = self.connection.create_bucket(self.bucket_name)
         else:
