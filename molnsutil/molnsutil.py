@@ -99,7 +99,7 @@ class SharedStorage():
 class S3Provider():
     def __init__(self, bucket_name):
         self.connection = S3Connection(is_secure=False,
-                                 #calling_format='boto.s3.connection.OrdinaryCallingFormat',
+                                 calling_format=boto.s3.connection.OrdinaryCallingFormat(),
                                  **s3config['credentials']
                                  )
         self.set_bucket(bucket_name)
