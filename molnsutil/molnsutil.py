@@ -108,24 +108,20 @@ class SharedStorage():
 class S3Provider():
     def __init__(self, bucket_name):
         self.connection = S3Connection(is_secure=False,
-                                 calling_format='boto.s3.connection.OrdinaryCallingFormat',
+                                 calling_format=boto.s3.connection.OrdinaryCallingFormat(),
                                  **s3config['credentials']
                                  )
         self.set_bucket(bucket_name)
     
-    def set_bucket(self,bucket_name=None):
-        if not bucket_name:
+    def set_bucket(self, bucket_name=None):
+        if bucket_name is None:
             self.bucket_name = "molns_bucket_{0}".format(str(uuid.uuid1()))
             bucket = self.connection.create_bucket(self.bucket_name)
         else:
             self.bucket_name = bucket_name
-            try:
-                bucket = self.connection.get_bucket(bucket_name)
-            except:
-                try:
-                    bucket = self.connection.create_bucket(bucket_name)
-                except Exception, e:
-                    raise MolnsUtilStorageException("Failed to create/set bucket in the object store."+str(e))
+            bucket = self.connection.lookup(bucket_name)
+            if bucket is None:
+                bucket = self.connection.create_bucket(bucket_name)
             self.bucket = bucket
 
     def create_bucket(self,bucket_name):
@@ -357,6 +353,7 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
     # Run the solver
     solver = NSMSolver(model)
     res = None
+    num_processed = 0
     for i in range(number_of_trajectories):
         try:
             result = solver.run(seed=seed_base+i)
@@ -495,12 +492,20 @@ class DistributedEnsemble():
         self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
         self.parameters = [parameters]
         self.number_of_realizations = 0
-        #self.seed_base = int(uuid.uuid4())
-        self.seed_base = random.randint(0,1e7)
+        self.seed_base = self.generate_seed_base()
         # A chunk list
         self.result_list = {}
         # Set the Ipython.parallel client
         self._update_client(client)
+    
+    def generate_seed_base(self):
+        """ Create a random number and truncate to 64 bits. """
+        x = int(uuid.uuid4())
+        if x.bit_length() >= 64:
+            x = x & ((1<<64)-1)
+            if x > (1 << 63) -1:
+                x -= 1 << 64
+        return x
 
     #--------------------------
     def save_state(self, name):
@@ -538,7 +543,7 @@ class DistributedEnsemble():
                 raise MolnsUtilException("number_of_realizations is zero")
             # Run simulations
             if self.number_of_realizations < number_of_realizations:
-                self.add_realizations( number_of_realizations - self.number_of_realizations, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode, cache_results=cache_results)
+                self.add_realizations( number_of_realizations - self.number_of_realizations, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode)
 
             if chunk_size is None:
                 chunk_size = self._determine_chunk_size(self.number_of_realizations)
@@ -600,7 +605,7 @@ class DistributedEnsemble():
                 seed_list.extend(range(self.seed_base, self.seed_base+number_of_realizations, chunk_size))
                 self.seed_base += number_of_realizations
             #def run_ensemble_map_and_aggregate(model_class, parameters, seed_base, number_of_trajectories, mapper, aggregator=None):
-            results  = self.lv.map_async(run_ensemble_map_and_aggregate, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [mapper]*num_pchunks, [agggregator]*num_pchunks)
+            results  = self.lv.map_async(run_ensemble_map_and_aggregate, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [mapper]*num_pchunks, [aggregator]*num_pchunks)
 
     
         if progress_bar:
@@ -632,10 +637,14 @@ class DistributedEnsemble():
         if reducer is None:
             reducer = builtin_reducer_default
         # Run reducer
-        ret = ParameterSweepResultList()
-        for param_set_id, param in enumerate(self.parameters):
-            ret.append(ParameterSweepResult(reducer(mapped_results[param_set_id], parameters=param), parameters=param))
-        return ret
+        return self.run_reducer(reducer, mapped_results)
+
+
+
+    def run_reducer(self, reducer, mapped_results):
+        """ Inside the run() function, apply the reducer to all of the map'ped-aggregated result values. """
+        return reducer(mapped_results[0], parameters=self.parameters[0])
+
 
 
     
@@ -653,11 +662,14 @@ class DistributedEnsemble():
         if not verbose:
             progress_bar=False
         else:
-            print "Generating {0} realizations of the model (chunk size={1})".format(number_of_realizations,chunk_size)
+            if len(self.parameters) > 1:
+                print "Generating {0} realizations of the model at {1} parameter points (chunk size={2})".format(number_of_realizations, len(self.parameters), chunk_size)
+            else:
+                print "Generating {0} realizations of the model (chunk size={1})".format(number_of_realizations,chunk_size)
         
         self.number_of_realizations += number_of_realizations
         
-        num_chunks = int(math.ceil(number_of_realizations/chunk_size))
+        num_chunks = int(math.ceil(number_of_realizations/float(chunk_size)))
         chunks = [chunk_size]*(num_chunks-1)
         chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
         # total chunks
@@ -674,11 +686,8 @@ class DistributedEnsemble():
             #need to do it this way cause the number of run per chunk might not be even
             seed_list.extend(range(self.seed_base, self.seed_base+number_of_realizations, chunk_size))
             self.seed_base += number_of_realizations
-        
         results  = self.lv.map_async(run_ensemble, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [storage_mode]*num_pchunks)
-            #TODO: results here should be a class 'RemoteResults' which has model parameters and location
         
-        # TODO: Refactor this so it can be reused by other methods.
         if progress_bar:
             # This should be factored out somehow.
             divid = str(uuid.uuid4())
@@ -704,7 +713,7 @@ class DistributedEnsemble():
     
 
     
-    #-------- Convience functions with builtin mappers/reducers  ------------------
+    #-------- Convenience functions with builtin mappers/reducers  ------------------
 
     def mean_variance(self, mapper=None, number_of_realizations=None, chunk_size=None, verbose=True, store_realizations=True, storage_mode="Shared", cache_results=False):
         """ Compute the mean and variance (second order central moment) of the function g(X) based on number_of_realizations realizations
@@ -777,13 +786,11 @@ class ParameterSweep(DistributedEnsemble):
         self.my_class_name = 'ParameterSweep'
         self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
         self.number_of_realizations = 0
-        self.seed_base = int(uuid.uuid4())
+        self.seed_base = self.generate_seed_base()
         self.result_list = {}
         self.parameters = []
         # process the parameters
         if type(parameters) is type({}):
-            raise MolnsUtilException("TODO")
-            #TODO
             pkeys = parameters.keys()
             pkey_lens = [0]*len(pkeys)
             pkey_ndxs = [0]*len(pkeys)
@@ -809,7 +816,7 @@ class ParameterSweep(DistributedEnsemble):
             raise MolnsUtilException("parameters must be a dict.")
 
         # Set the Ipython.parallel client
-        self._update_client(client)
+        self._update_client()
 
     def _determine_chunk_size(self, number_of_realizations):
         """ Determine a optimal chunk size. """
@@ -819,6 +826,12 @@ class ParameterSweep(DistributedEnsemble):
             return number_of_realizations
         return int(max(1, math.ceil(number_of_realizations*num_params/float(num_procs))))
 
+    def run_reducer(self, reducer, mapped_results):
+        """ Inside the run() function, apply the reducer to all of the map'ped-aggregated result values. """
+        ret = ParameterSweepResultList()
+        for param_set_id, param in enumerate(self.parameters):
+            ret.append(ParameterSweepResult(reducer(mapped_results[param_set_id], parameters=param), parameters=param))
+        return ret
     #--------------------------
 
 
@@ -830,9 +843,15 @@ class ParameterSweepResult():
         self.result = result
         self.parameters = parameters
 
+    def __str__(self):
+        return "{0} => {1}".format(self.parameters, self.result)
+
 class ParameterSweepResultList(list):
-    """TODO"""
-    pass
+    def __str__(self):
+        l = []
+        for i in self:
+            l.append(str(i))
+        return "[{0}]".format(", ".join(l))
 
 
 
