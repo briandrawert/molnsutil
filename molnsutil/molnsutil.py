@@ -747,6 +747,7 @@ class DistributedEnsemble():
         self.c[:].use_dill()
         if self.num_engines == None:
             self.lv = self.c.load_balanced_view()
+            self.num_engines = len(self.c.ids)
         else:
             max_num_engines = len(self.c.ids)
             if self.num_engines > max_num_engines:
