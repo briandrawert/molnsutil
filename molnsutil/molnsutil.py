@@ -744,8 +744,10 @@ class DistributedEnsemble():
         else:
             self.c = client
         self.c[:].use_dill()
-        self.dv = self.c[:]
         self.lv = self.c.load_balanced_view()
+        # Set the number of times a failed task is retried. This makes it possible to recover
+        # from engine failure.
+        self.lv.retries=3
 
     def _determine_chunk_size(self, number_of_realizations):
         """ Determine a optimal chunk size. """
@@ -836,7 +838,6 @@ class ParameterSweep(DistributedEnsemble):
 
 
 
-
 class ParameterSweepResult():
     """TODO"""
     def __init__(self, result, parameters):
@@ -852,8 +853,6 @@ class ParameterSweepResultList(list):
         for i in self:
             l.append(str(i))
         return "[{0}]".format(", ".join(l))
-
-
 
 
 
