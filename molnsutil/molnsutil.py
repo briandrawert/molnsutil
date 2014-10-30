@@ -496,7 +496,8 @@ class DistributedEnsemble():
         # A chunk list
         self.result_list = {}
         # Set the Ipython.parallel client
-        self._update_client(client,num_engines)
+        self.num_engines = num_engines
+        self._update_client(client)
     
     def generate_seed_base(self):
         """ Create a random number and truncate to 64 bits. """
@@ -738,21 +739,22 @@ class DistributedEnsemble():
 
     #--------------------------
 
-    def _update_client(self, client=None, num_engines=None):
+    def _update_client(self, client=None):
         if client is None:
             self.c = IPython.parallel.Client()
         else:
             self.c = client
         self.c[:].use_dill()
-        if num_engines == None:
+        if self.num_engines == None:
             self.lv = self.c.load_balanced_view()
         else:
             max_num_engines = len(self.c.ids)
-            if num_engines > max_num_engines:
-                engines = max_num_engines
+            if self.num_engines > max_num_engines:
+                self.num_engines = max_num_engines
+                self.lv = self.c.load_balanced_view()
             else:
-                engines = range(0,num_engines,1)
-            self.lv = self.c.load_balanced_view(engines)
+                engines = self.c.ids[:self.num_engines]
+                self.lv = self.c.load_balanced_view(engines)
         
         # Set the number of times a failed task is retried. This makes it possible to recover
         # from engine failure.
@@ -760,8 +762,7 @@ class DistributedEnsemble():
 
     def _determine_chunk_size(self, number_of_realizations):
         """ Determine a optimal chunk size. """
-        num_proc = len(self.c.ids)
-        return int(max(1, round(number_of_realizations/float(num_proc))))
+        return int(max(1, round(number_of_realizations/float(self.num_engines))))
 
     # TODO: take a hard look at the following functions
     def rebalance_chunk_list(self):
@@ -784,7 +785,7 @@ class DistributedEnsemble():
 class ParameterSweep(DistributedEnsemble):
     """ Making parameter sweeps on distributed compute systems easier. """
 
-    def __init__(self, model_class, parameters):
+    def __init__(self, model_class, parameters, client=None, num_engines=None):
         """ Constructor.
         Args:
           model_class: a class object of the model for simulation, must be a sub-class of URDMEModel
@@ -827,15 +828,15 @@ class ParameterSweep(DistributedEnsemble):
             raise MolnsUtilException("parameters must be a dict.")
 
         # Set the Ipython.parallel client
+        self.num_engines = num_engines
         self._update_client()
 
     def _determine_chunk_size(self, number_of_realizations):
         """ Determine a optimal chunk size. """
-        num_procs = len(self.c.ids)
         num_params = len(self.parameters)
-        if num_params >= num_procs:
+        if num_params >= self.num_engines:
             return number_of_realizations
-        return int(max(1, math.ceil(number_of_realizations*num_params/float(num_procs))))
+        return int(max(1, math.ceil(number_of_realizations*num_params/float(self.num_engines))))
 
     def run_reducer(self, reducer, mapped_results):
         """ Inside the run() function, apply the reducer to all of the map'ped-aggregated result values. """
