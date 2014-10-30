@@ -244,10 +244,10 @@ class PersistentStorage():
             return
     
         if self.provider_type == 'EC2':
-            self.provider = S3Provider(bucket_name)
+            self.provider = S3Provider(self.bucket_name)
         # self.provider = S3Provider()
         elif self.provider_type == 'OpenStack':
-            self.provider = SwiftProvider(bucket_name)
+            self.provider = SwiftProvider(self.bucket_name)
         else:
             raise MolnsUtilStorageException("Unknown provider type '{0}'.".format(self.provider_type))
         self.initialized = True
