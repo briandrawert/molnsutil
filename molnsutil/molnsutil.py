@@ -27,6 +27,8 @@ import math
 import dill
 import cloud
 
+import random
+
 import swiftclient.client
 import IPython.parallel
 import uuid
@@ -80,16 +82,23 @@ class SharedStorage():
     """ This class provides an abstraction for storing and reading objects on/from
         the sshfs mounted storage on the controller. """
     
-    def __init__(self):
+    def __init__(self, serialization_method="cloudpickle"):
         self.folder_name = "/home/ubuntu/shared"
+        self.serialization_method = serialization_method
 	
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
-            cloud.serialization.cloudpickle.dump(data,fh)
+            if self.serialization_method == "cloudpickle":
+                cloud.serialization.cloudpickle.dump(data,fh)
+            elif self.serialization_method == "json":
+                json.dump(data,fh)
 
     def get(self, filename):
         with open(self.folder_name+"/"+filename, 'rb') as fh:
-            data = cloud.serialization.cloudpickle.loads(fh.read())
+            if self.serialization_method == "cloudpickle":
+                data = cloud.serialization.cloudpickle.loads(fh.read())
+            elif self.serialization_method == "json":
+                data = json.loads(fh.read())
         return data
 
     def delete(self,filename):
@@ -370,6 +379,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         Returns: a list of filenames for the serialized result objects.
         
         """
+    
     import pyurdme
     from pyurdme.nsmsolver import NSMSolver
     import sys
@@ -476,7 +486,7 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
 class DistributedEnsemble():
     """ A class to provide an API for execution of a distributed ensemble. """
     
-    def __init__(self, model_class=None, parameters=None, client=None):
+    def __init__(self, model_class=None, parameters=None, client=None, num_engines=None):
         """ Constructor """
         self.my_class_name = 'DistributedEnsemble'
         self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
@@ -486,7 +496,7 @@ class DistributedEnsemble():
         # A chunk list
         self.result_list = {}
         # Set the Ipython.parallel client
-        self._update_client(client)
+        self._update_client(client,num_engines)
     
     def generate_seed_base(self):
         """ Create a random number and truncate to 64 bits. """
@@ -728,14 +738,25 @@ class DistributedEnsemble():
 
     #--------------------------
 
-    def _update_client(self, client=None):
+    def _update_client(self, client=None, num_engines=None):
         if client is None:
             self.c = IPython.parallel.Client()
         else:
             self.c = client
         self.c[:].use_dill()
-        self.dv = self.c[:]
-        self.lv = self.c.load_balanced_view()
+        if num_engines == None:
+            self.lv = self.c.load_balanced_view()
+        else:
+            max_num_engines = len(self.c.ids)
+            if num_engines > max_num_engines:
+                engines = max_num_engines
+            else:
+                engines = range(0,num_engines,1)
+            self.lv = self.c.load_balanced_view(engines)
+        
+        # Set the number of times a failed task is retried. This makes it possible to recover
+        # from engine failure.
+        self.lv.retries=3
 
     def _determine_chunk_size(self, number_of_realizations):
         """ Determine a optimal chunk size. """
@@ -826,7 +847,6 @@ class ParameterSweep(DistributedEnsemble):
 
 
 
-
 class ParameterSweepResult():
     """TODO"""
     def __init__(self, result, parameters):
@@ -842,8 +862,6 @@ class ParameterSweepResultList(list):
         for i in self:
             l.append(str(i))
         return "[{0}]".format(", ".join(l))
-
-
 
 
 
