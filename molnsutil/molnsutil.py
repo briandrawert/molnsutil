@@ -486,7 +486,7 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
 class DistributedEnsemble():
     """ A class to provide an API for execution of a distributed ensemble. """
     
-    def __init__(self, model_class=None, parameters=None, client=None):
+    def __init__(self, model_class=None, parameters=None, client=None, num_engines=None):
         """ Constructor """
         self.my_class_name = 'DistributedEnsemble'
         self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
@@ -496,7 +496,7 @@ class DistributedEnsemble():
         # A chunk list
         self.result_list = {}
         # Set the Ipython.parallel client
-        self._update_client(client)
+        self._update_client(client,num_engines)
     
     def generate_seed_base(self):
         """ Create a random number and truncate to 64 bits. """
@@ -738,13 +738,22 @@ class DistributedEnsemble():
 
     #--------------------------
 
-    def _update_client(self, client=None):
+    def _update_client(self, client=None, num_engines=None):
         if client is None:
             self.c = IPython.parallel.Client()
         else:
             self.c = client
         self.c[:].use_dill()
-        self.lv = self.c.load_balanced_view()
+        if num_engines == None:
+            self.lv = self.c.load_balanced_view()
+        else:
+            max_num_engines = len(c.ids)
+            if num_engines > max_num_engines:
+                engines = max_num_engines
+            else:
+                engines = range(0,num_engines,1)
+            self.lv = self.c.load_balanced_view(engines)
+        
         # Set the number of times a failed task is retried. This makes it possible to recover
         # from engine failure.
         self.lv.retries=3
