@@ -231,20 +231,29 @@ class PersistentStorage():
         if bucket_name is None:
             # try reading it from the config file
             try:
-                bucket_name = s3config['bucket_name']
+                self.bucket_name = s3config['bucket_name']
             except:
-                pass
+                raise MolnsUtilStorageException("Could not find bucket_name in the persistent storage config.")
+        else:
+            self.bucket_name = bucket_name
+        self.provider_type = s3config['provider_type']
+        self.initialized = False
+        
+    def setup_provider(self):
+        if self.initialized:
+            return
     
-        if s3config['provider_type'] == 'EC2':
+        if self.provider_type == 'EC2':
             self.provider = S3Provider(bucket_name)
         # self.provider = S3Provider()
-        elif s3config['provider_type'] == 'OpenStack':
+        elif self.provider_type == 'OpenStack':
             self.provider = SwiftProvider(bucket_name)
         else:
-            raise MolnsUtilStorageException("Unknown provider type.")
-        
+            raise MolnsUtilStorageException("Unknown provider type '{0}'.".format(self.provider_type))
+        self.initialized = True
 
     def list_buckets(self):
+        self.setup_provider()
         all_buckets=self.provider.get_all_buckets()
         buckets = []
         for bucket in all_buckets:
@@ -252,6 +261,7 @@ class PersistentStorage():
         return buckets
 
     def set_bucket(self,bucket_name=None):
+        self.setup_provider()
         if not bucket_name:
             bucket = self.provider.create_bucket("molns_bucket_{0}".format(str(uuid.uuid1())))
         else:
@@ -266,22 +276,26 @@ class PersistentStorage():
         self.bucket = bucket
 
     def put(self, name, data):
+        self.setup_provider()
         self.provider.put(name, cloud.serialization.cloudpickle.dumps(data))
     
-    
     def get(self, name, validate=False):
+        self.setup_provider()
         return cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
     
     def delete(self, name):
         """ Delete an object. """
+        self.setup_provider()
         self.provider.delete(name)
     
     def list(self):
         """ List all containers. """
+        self.setup_provider()
         return self.provider.list()
 
     def delete_all(self):
         """ Delete all objects in the global storage area. """
+        self.setup_provider()
         self.provider.delete_all()
 
 #------  default aggregators -----
