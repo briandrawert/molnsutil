@@ -26,6 +26,7 @@ import uuid
 import math
 import dill
 import cloud
+logging.getLogger('Cloud').setLevel(logging.ERROR)
 
 import random
 
