@@ -725,7 +725,7 @@ class DistributedEnsemble():
                 display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(i+1)/len(results))))
         
         
-        return {'wall_time':results.wall_time}
+        return {'wall_time':results.wall_time,'serial_time':results.serial_time}
     
 
     
