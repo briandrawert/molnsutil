@@ -316,6 +316,7 @@ class CachedPersistentStorage(PersistentStorage):
         except: # if not there, read it from the Object Store and write it to the cache
             data = cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
             self.cache.put(name, data)
+        return data
 
 # TODO: Extend the delete methods so that they also delete the file from cache
 # TODO: Implement clear_cache(self) - delete all files from Local Cache.
