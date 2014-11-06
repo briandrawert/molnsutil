@@ -64,8 +64,8 @@ class LocalStorage():
     """ This class provides an abstraction for storing and reading objects on/from
         the ephemeral storage. """
     
-    def __init__(self):
-        self.folder_name = "/home/ubuntu/localarea"
+    def __init__(self, folder_name="/home/ubuntu/localarea"):
+        self.folder_name = folder_name
 	
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
@@ -220,6 +220,22 @@ class SwiftProvider():
         self.close()
 
 
+class CachedPersistentStorage():
+    def __init__(self, bucket_name=None):
+        PersistentStorage.__init__(self,bucket_name)
+        self.cache = LocalStorage(bucket_name="/home/ubuntu/molnsarea/cache")
+
+    def get(self, name, validate=False):
+        self.setup_provider()
+        # Try to read it form cache
+        try:
+            data = cloud.serialization.cloudpickle.loads(self.cache.get(name, validate))
+        except: # if not there, read it from the Object Store and write it to the cache
+            data = cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
+            self.cache.put(name, data)
+
+
+
 class PersistentStorage():
     """
        Provides an abstaction for interacting with the Object Stores
@@ -227,7 +243,6 @@ class PersistentStorage():
     """
 
     def __init__(self, bucket_name=None):
-        #print s3config['credentials']
         
         if bucket_name is None:
             # try reading it from the config file
@@ -423,7 +438,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     # Run the solver
     solver = NSMSolver(model)
     filenames = []
-    for i in range(number_of_trajectories):
+    for i in xrange(number_of_trajectories):
         try:
             result = solver.run(seed=seed_base+i)
             filename = str(uuid.uuid1())
@@ -583,15 +598,7 @@ class DistributedEnsemble():
                 pparams.extend( [param]*num_chunks )
                 for i in range(num_chunks):
                     presult_list.append( self.result_list[id][i*chunk_size:(i+1)*chunk_size] )
-            # Run mapper & aggregator
-            #if len(presult_list) != len(param_set_ids):
-            #    raise MolnsUtilException(" len(presult_list) != len(param_set_ids) ")
-            #if len(presult_list) != len():
-            #def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_results=False):
-            #print "len(presult_list) = {0}".format(len(presult_list))
-            #print "len(param_set_ids) = {0}".format(len(param_set_ids))
-            #print "num_pchunks = {0} num_chunks={1} len(self.parameters)={2}".format(num_pchunks, num_chunks, len(self.parameters))
-            #print "presult_list = {0}".format(presult_list)
+
             results = self.lv.map_async(map_and_aggregate, presult_list, param_set_ids, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
         else:
             # If we don't store the realizations (or use the stored ones)
