@@ -306,7 +306,7 @@ class CachedPersistentStorage(PersistentStorage):
     def __init__(self, bucket_name=None):
         PersistentStorage.__init__(self,bucket_name)
         # TODO: Should we have a separate folder for the cache??
-        self.cache = LocalStorage(folder_name="/home/ubuntu/molnsarea")
+        self.cache = LocalStorage()
     
     def get(self, name, validate=False):
         self.setup_provider()
