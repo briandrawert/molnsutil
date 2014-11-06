@@ -220,22 +220,6 @@ class SwiftProvider():
         self.close()
 
 
-class CachedPersistentStorage(PersistentStorage):
-    def __init__(self, bucket_name=None):
-        PersistentStorage.__init__(self,bucket_name)
-        self.cache = LocalStorage(bucket_name="/home/ubuntu/molnsarea")
-
-    def get(self, name, validate=False):
-        self.setup_provider()
-        # Try to read it form cache
-        try:
-            data = cloud.serialization.cloudpickle.loads(self.cache.get(name, validate))
-        except: # if not there, read it from the Object Store and write it to the cache
-            data = cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
-            self.cache.put(name, data)
-
-    # TODO: Extend the delete methods so that they also delete the file from cache
-    # TODO: Implement clear_cache(self) - delete all files from Local Cache.
 
 
 
@@ -316,6 +300,26 @@ class PersistentStorage():
         """ Delete all objects in the global storage area. """
         self.setup_provider()
         self.provider.delete_all()
+
+
+class CachedPersistentStorage(PersistentStorage):
+    def __init__(self, bucket_name=None):
+        PersistentStorage.__init__(self,bucket_name)
+        # TODO: Should we have a separate folder for the cache??
+        self.cache = LocalStorage(bucket_name="/home/ubuntu/molnsarea")
+    
+    def get(self, name, validate=False):
+        self.setup_provider()
+        # Try to read it form cache
+        try:
+            data = cloud.serialization.cloudpickle.loads(self.cache.get(name, validate))
+        except: # if not there, read it from the Object Store and write it to the cache
+            data = cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
+            self.cache.put(name, data)
+
+# TODO: Extend the delete methods so that they also delete the file from cache
+# TODO: Implement clear_cache(self) - delete all files from Local Cache.
+
 
 #------  default aggregators -----
 def builtin_aggregator_list_append(new_result, aggregated_results=None, parameters=None):
