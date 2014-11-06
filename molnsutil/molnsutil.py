@@ -223,7 +223,7 @@ class SwiftProvider():
 class CachedPersistentStorage():
     def __init__(self, bucket_name=None):
         PersistentStorage.__init__(self,bucket_name)
-        self.cache = LocalStorage(bucket_name="/home/ubuntu/molnsarea/cache")
+        self.cache = LocalStorage(bucket_name="/home/ubuntu/molnsarea")
 
     def get(self, name, validate=False):
         self.setup_provider()
