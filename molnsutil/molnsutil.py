@@ -29,6 +29,7 @@ import cloud
 logging.getLogger('Cloud').setLevel(logging.ERROR)
 
 import random
+import copy
 
 import swiftclient.client
 import IPython.parallel
@@ -333,7 +334,7 @@ def builtin_aggregator_list_append(new_result, aggregated_results=None, paramete
 def builtin_aggregator_add(new_result, aggregated_results=None, parameters=None):
     """ chunk aggregator for the mean function. """
     if aggregated_results is None:
-        return (new_result, 1)
+        return (copy.deepcopy(new_result), 1)
     return (aggregated_results[0]+new_result, aggregated_results[1]+1)
 
 def builtin_aggregator_sum_and_sum2(new_result, aggregated_results=None, parameters=None):
@@ -461,7 +462,7 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
     """ Reduces a list of results by applying the map function 'mapper'.
         When this function is applied on an engine, it will first
         look for the result object in the local ephemeral storage (cache),
-        then in the Shared area (global non-persisitent), then in the
+        then in the Shared area (global non-persistent), then in the
         Object Store (global persistent).
         
         If cache_results=True, then result objects will be written
@@ -606,7 +607,7 @@ class DistributedEnsemble():
                 pparams.extend( [param]*num_chunks )
                 for i in range(num_chunks):
                     presult_list.append( self.result_list[id][i*chunk_size:(i+1)*chunk_size] )
-
+            
             results = self.lv.map_async(map_and_aggregate, presult_list, param_set_ids, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
         else:
             # If we don't store the realizations (or use the stored ones)
