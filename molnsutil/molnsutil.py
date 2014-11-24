@@ -322,7 +322,6 @@ class CachedPersistentStorage(PersistentStorage):
 # TODO: Extend the delete methods so that they also delete the file from cache
 # TODO: Implement clear_cache(self) - delete all files from Local Cache.
 
-
 #------  default aggregators -----
 def builtin_aggregator_list_append(new_result, aggregated_results=None, parameters=None):
     """ default chunk aggregator. """
@@ -483,6 +482,7 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
     result = None
     for i,filename in enumerate(results):
         enotes = ''
+        result = None
         try:
             result = ls.get(filename)
         except Exception as e:
