@@ -309,7 +309,7 @@ class CachedPersistentStorage(PersistentStorage):
         self.setup_provider()
         # Try to read it form cache
         try:
-            data = cloud.serialization.cloudpickle.loads(self.cache.get(name, validate))
+            data = cloud.serialization.cloudpickle.loads(self.cache.get(name))
         except: # if not there, read it from the Object Store and write it to the cache
             data = cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
             try:
