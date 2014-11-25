@@ -29,6 +29,7 @@ import cloud
 logging.getLogger('Cloud').setLevel(logging.ERROR)
 
 import random
+import copy
 
 import swiftclient.client
 import IPython.parallel
@@ -64,8 +65,8 @@ class LocalStorage():
     """ This class provides an abstraction for storing and reading objects on/from
         the ephemeral storage. """
     
-    def __init__(self):
-        self.folder_name = "/home/ubuntu/localarea"
+    def __init__(self, folder_name="/home/ubuntu/localarea"):
+        self.folder_name = folder_name
 	
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
@@ -227,7 +228,6 @@ class PersistentStorage():
     """
 
     def __init__(self, bucket_name=None):
-        #print s3config['credentials']
         
         if bucket_name is None:
             # try reading it from the config file
@@ -299,6 +299,29 @@ class PersistentStorage():
         self.setup_provider()
         self.provider.delete_all()
 
+
+class CachedPersistentStorage(PersistentStorage):
+    def __init__(self, bucket_name=None):
+        PersistentStorage.__init__(self,bucket_name)
+        self.cache = LocalStorage(folder_name = "/mnt/molnsarea/cache")
+    
+    def get(self, name, validate=False):
+        self.setup_provider()
+        # Try to read it form cache
+        try:
+            data = cloud.serialization.cloudpickle.loads(self.cache.get(name, validate))
+        except: # if not there, read it from the Object Store and write it to the cache
+            data = cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
+            try:
+                self.cache.put(name, data)
+            except:
+                # For now, we just ignore errors here, like if the disk is full...
+                pass
+        return data
+
+# TODO: Extend the delete methods so that they also delete the file from cache
+# TODO: Implement clear_cache(self) - delete all files from Local Cache.
+
 #------  default aggregators -----
 def builtin_aggregator_list_append(new_result, aggregated_results=None, parameters=None):
     """ default chunk aggregator. """
@@ -310,7 +333,7 @@ def builtin_aggregator_list_append(new_result, aggregated_results=None, paramete
 def builtin_aggregator_add(new_result, aggregated_results=None, parameters=None):
     """ chunk aggregator for the mean function. """
     if aggregated_results is None:
-        return (new_result, 1)
+        return (copy.deepcopy(new_result), 1)
     return (aggregated_results[0]+new_result, aggregated_results[1]+1)
 
 def builtin_aggregator_sum_and_sum2(new_result, aggregated_results=None, parameters=None):
@@ -423,7 +446,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     # Run the solver
     solver = NSMSolver(model)
     filenames = []
-    for i in range(number_of_trajectories):
+    for i in xrange(number_of_trajectories):
         try:
             result = solver.run(seed=seed_base+i)
             filename = str(uuid.uuid1())
@@ -438,7 +461,7 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
     """ Reduces a list of results by applying the map function 'mapper'.
         When this function is applied on an engine, it will first
         look for the result object in the local ephemeral storage (cache),
-        then in the Shared area (global non-persisitent), then in the
+        then in the Shared area (global non-persistent), then in the
         Object Store (global persistent).
         
         If cache_results=True, then result objects will be written
@@ -457,8 +480,10 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
     num_processed=0
     res = None
     result = None
+    
     for i,filename in enumerate(results):
         enotes = ''
+        result = None
         try:
             result = ls.get(filename)
         except Exception as e:
@@ -583,15 +608,7 @@ class DistributedEnsemble():
                 pparams.extend( [param]*num_chunks )
                 for i in range(num_chunks):
                     presult_list.append( self.result_list[id][i*chunk_size:(i+1)*chunk_size] )
-            # Run mapper & aggregator
-            #if len(presult_list) != len(param_set_ids):
-            #    raise MolnsUtilException(" len(presult_list) != len(param_set_ids) ")
-            #if len(presult_list) != len():
-            #def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_results=False):
-            #print "len(presult_list) = {0}".format(len(presult_list))
-            #print "len(param_set_ids) = {0}".format(len(param_set_ids))
-            #print "num_pchunks = {0} num_chunks={1} len(self.parameters)={2}".format(num_pchunks, num_chunks, len(self.parameters))
-            #print "presult_list = {0}".format(presult_list)
+            
             results = self.lv.map_async(map_and_aggregate, presult_list, param_set_ids, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
         else:
             # If we don't store the realizations (or use the stored ones)
@@ -725,7 +742,7 @@ class DistributedEnsemble():
                 display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(i+1)/len(results))))
         
         
-        return {'wall_time':results.wall_time}
+        return {'wall_time':results.wall_time,'serial_time':results.serial_time}
     
 
     
