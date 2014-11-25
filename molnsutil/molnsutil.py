@@ -221,9 +221,6 @@ class SwiftProvider():
         self.close()
 
 
-
-
-
 class PersistentStorage():
     """
        Provides an abstaction for interacting with the Object Stores
@@ -306,8 +303,7 @@ class PersistentStorage():
 class CachedPersistentStorage(PersistentStorage):
     def __init__(self, bucket_name=None):
         PersistentStorage.__init__(self,bucket_name)
-        # TODO: Should we have a separate folder for the cache??
-        self.cache = LocalStorage()
+        self.cache = LocalStorage(folder_name = "/mnt/molnsarea/cache")
     
     def get(self, name, validate=False):
         self.setup_provider()
@@ -316,7 +312,11 @@ class CachedPersistentStorage(PersistentStorage):
             data = cloud.serialization.cloudpickle.loads(self.cache.get(name, validate))
         except: # if not there, read it from the Object Store and write it to the cache
             data = cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
-            self.cache.put(name, data)
+            try:
+                self.cache.put(name, data)
+            except:
+                # For now, we just ignore errors here, like if the disk is full...
+                pass
         return data
 
 # TODO: Extend the delete methods so that they also delete the file from cache
@@ -480,6 +480,7 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
     num_processed=0
     res = None
     result = None
+    
     for i,filename in enumerate(results):
         enotes = ''
         result = None
