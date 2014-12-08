@@ -135,7 +135,7 @@ class S3Provider():
             raise MolnsUtilStorageException("Could not obtain key in the global store. ")
         k.key = name
         try:
-            num_bytes = k.set_contents_from_string(data, reduced_redundancy)
+            num_bytes = k.set_contents_from_string(data, reduced_redundancy=reduced_redundancy)
             if num_bytes == 0:
                 raise MolnsUtilStorageException("No bytes written to key.")
         except Exception, e:
