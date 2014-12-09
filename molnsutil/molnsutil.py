@@ -129,13 +129,13 @@ class S3Provider():
     def create_bucket(self,bucket_name):
         return self.connection.create_bucket(bucket_name)
 
-    def put(self, name, data):
+    def put(self, name, data, reduced_redundancy=True):
         k = Key(self.bucket)
         if not k:
             raise MolnsUtilStorageException("Could not obtain key in the global store. ")
         k.key = name
         try:
-            num_bytes = k.set_contents_from_string(data)
+            num_bytes = k.set_contents_from_string(data, reduced_redundancy=reduced_redundancy)
             if num_bytes == 0:
                 raise MolnsUtilStorageException("No bytes written to key.")
         except Exception, e:
@@ -309,7 +309,7 @@ class CachedPersistentStorage(PersistentStorage):
         self.setup_provider()
         # Try to read it form cache
         try:
-            data = cloud.serialization.cloudpickle.loads(self.cache.get(name, validate))
+            data = cloud.serialization.cloudpickle.loads(self.cache.get(name))
         except: # if not there, read it from the Object Store and write it to the cache
             data = cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
             try:
