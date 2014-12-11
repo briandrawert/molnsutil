@@ -408,24 +408,18 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
     return {'result':res, 'param_set_id':param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
 
 
-class FileWriter(multiprocessing.Process):
-
-    def __init__(self,storage_mode, filename, result):
-        multiprocessing. Process.__init__(self)
-        self.storage_mode = storage_mode
-        self.filename = filename
-        self.result = result
-        
-    def run(self):
+def write_file(storage_mode,filename, result):
     
-        if self.storage_mode=="Shared":
-            storage  = SharedStorage()
-        elif self.storage_mode=="Persistent":
-            storage = PersistentStorage()
-        else:
-            raise MolnsUtilException("Unknown storage type '{0}'".format(storage_mode))
-        storage.put(filename, result)
-        return
+    from molnsutil import LocalStorage, SharedStorage, PersistentStorage
+
+    if storage_mode=="Shared":
+        storage  = SharedStorage()
+    elif storage_mode=="Persistent":
+        storage = PersistentStorage()
+    else:
+        raise MolnsUtilException("Unknown storage type '{0}'".format(storage_mode))
+    
+    storage.put(filename, result)
 
 def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_trajectories, storage_mode="Shared"):
     """ Generates an ensemble consisting of number_of_trajectories realizations by
@@ -444,7 +438,8 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     import sys
     import uuid
     from molnsutil import PersistentStorage, LocalStorage, SharedStorage
-    
+    import multiprocessing
+
     if storage_mode=="Shared":
         storage  = SharedStorage()
     elif storage_mode=="Persistent":
@@ -473,7 +468,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
             # We should try to thread this to hide latency in file upload...
             result = solver.run(seed=seed_base+i)
             filename = str(uuid.uuid1())
-            p = FileWriter(storage_mode, filename, result)
+            p = multiprocessing.Process(target=write_file, args=(storage_mode, filename, result))
             p.start()
             processes.append(p)
             #pool.apply_async(storage.put, filename, result)
@@ -484,8 +479,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
 
     for p in processes:
         p.join()
-        p.terminate()
-    
+
     #pool.close()
     return {'filenames':filenames, 'param_set_id':param_set_id}
 
