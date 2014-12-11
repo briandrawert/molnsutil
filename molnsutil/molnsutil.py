@@ -409,7 +409,7 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
     return {'result':res, 'param_set_id':param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
 
 
-def write_file(storage_mode="Shared",filename, result)
+def write_file(storage_mode="Shared",filename, result):s
     if storage_mode=="Shared":
         storage  = SharedStorage()
     elif storage_mode=="Persistent":
