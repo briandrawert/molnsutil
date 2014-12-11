@@ -50,8 +50,7 @@ except:
 import json
 
 
-from multiprocessing import Pool
-
+import multiprocessing
 #     s3.json is a JSON file that contains the follwing info:
 #
 #     'aws_access_key_id' : AWS access key
@@ -445,7 +444,6 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     import sys
     import uuid
     from molnsutil import PersistentStorage, LocalStorage, SharedStorage
-    import multiprocessing
     
     if storage_mode=="Shared":
         storage  = SharedStorage()
