@@ -408,6 +408,16 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
             raise MolnsUtilException(notes)
     return {'result':res, 'param_set_id':param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
 
+
+def write_file(storage_mode="Shared",filename, result)
+    if storage_mode=="Shared":
+        storage  = SharedStorage()
+    elif storage_mode=="Persistent":
+        storage = PersistentStorage()
+    else:
+        raise MolnsUtilException("Unknown storage type '{0}'".format(storage_mode))
+    storage.put(filename, result)
+
 def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_trajectories, storage_mode="Shared"):
     """ Generates an ensemble consisting of number_of_trajectories realizations by
         running pyurdme nt number of times. The resulting pyurdme result objects
@@ -425,6 +435,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     import sys
     import uuid
     from molnsutil import PersistentStorage, LocalStorage, SharedStorage
+    import multiprocessing
     
     if storage_mode=="Shared":
         storage  = SharedStorage()
@@ -446,20 +457,28 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         raise MolnsUtilException(notes)
 
     # Run the solver
-    pool = Pool(processes=4)
     solver = NSMSolver(model)
     filenames = []
+    processes=[]
     for i in xrange(number_of_trajectories):
         try:
             # We should try to thread this to hide latency in file upload...
             result = solver.run(seed=seed_base+i)
             filename = str(uuid.uuid1())
-            pool.apply_async(storage.put, filename, result)
+            p = multiprocessing.Process(target=write_file, args=(storage_mode, filename, result))
+            p.start()
+            processes.append(p)
+            #pool.apply_async(storage.put, filename, result)
             #storage.put(filename, result)
             filenames.append(filename)
         except:
             raise
-    pool.close()
+
+    for p in processes:
+        p.join()
+        p.terminate()
+    
+    #pool.close()
     return {'filenames':filenames, 'param_set_id':param_set_id}
 
 def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_results=False):
