@@ -42,13 +42,15 @@ class MolnsUtilException(Exception):
 class MolnsUtilStorageException(Exception):
     pass
 
-
 try:
     import dill as pickle
 except:
     import pickle
 
 import json
+
+
+from multiprocessing import Pool
 
 #     s3.json is a JSON file that contains the follwing info:
 #
@@ -444,17 +446,20 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         raise MolnsUtilException(notes)
 
     # Run the solver
+    pool = Pool(processes=4)
     solver = NSMSolver(model)
     filenames = []
     for i in xrange(number_of_trajectories):
         try:
+            # We should try to thread this to hide latency in file upload...
             result = solver.run(seed=seed_base+i)
             filename = str(uuid.uuid1())
-            storage.put(filename, result)
+            pool.apply_async(storage.put, filename, result)
+            #storage.put(filename, result)
             filenames.append(filename)
         except:
             raise
-    
+    pool.close()
     return {'filenames':filenames, 'param_set_id':param_set_id}
 
 def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_results=False):
