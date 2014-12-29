@@ -583,7 +583,7 @@ class DistributedEnsemble():
         """ Main entry point """
         if store_realizations:
             if self.storage_mode is None:
-                if storage_mode != "Persistent" or storage_mode != "Shared":
+                if storage_mode != "Persistent" and storage_mode != "Shared":
                     raise MolnsUtilException("Acceptable values for 'storage_mode' are 'Persistent' or 'Shared'")
                 self.storage_mode = storage_mode
             elif self.storage_mode != storage_mode:
@@ -819,7 +819,7 @@ class DistributedEnsemble():
             ss = SharedStorage()
         elif self.storage_mode == "Persistent":
             ss = PersistentStorage()
-            
+
         for param_set_id in self.result_list:
             for filename in self.result_list[param_set_id]:
                 try:
