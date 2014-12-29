@@ -1,9 +1,9 @@
 """ 
-  Utility module for MOLNs^2. 
+  Utility module for MOLNs.
   
   molnsutil contains implementations of a persisitent storage API for 
-  staging objects to an Object Store in the clouds supported by MOLNs^2. 
-  This can be used in MOLNs^2 to write variables that are presistent
+  staging objects to an Object Store in the clouds supported by MOLNs.
+  This can be used in MOLNs to write variables that are presistent
   between sessions, provides a convenetient way to get data out of the
   system, and it also provides a means during parallel computations to 
   stage data so that it is visible to all compute engines, in contrast
@@ -533,6 +533,7 @@ class DistributedEnsemble():
         self.parameters = [parameters]
         self.number_of_realizations = 0
         self.seed_base = self.generate_seed_base()
+        self.storage_mode = None
         # A chunk list
         self.result_list = {}
         # Set the Ipython.parallel client
@@ -557,6 +558,7 @@ class DistributedEnsemble():
         state['number_of_realizations'] = self.number_of_realizations
         state['seed_base'] = self.seed_base
         state['result_list'] = self.result_list
+        state['storage_mode'] = self.storage_mode
         if not os.path.isdir('.molnsutil'):
             os.makedirs('.molnsutil')
         with open('.molnsutil/{1}-{0}'.format(name, self.my_class_name)) as fd:
@@ -572,6 +574,7 @@ class DistributedEnsemble():
         self.number_of_realizations = state['number_of_realizations']
         self.seed_base = state['seed_base']
         self.result_list = state['result_list']
+        self.storage_mode = state['storage_mode']
     
     #--------------------------
     # MAIN FUNCTION
@@ -579,6 +582,12 @@ class DistributedEnsemble():
     def run(self, mapper, aggregator=None, reducer=None, number_of_realizations=None, chunk_size=None, verbose=True, progress_bar=True, store_realizations=True, storage_mode="Shared", cache_results=False):
         """ Main entry point """
         if store_realizations:
+            if self.storage_mode is None:
+                if storage_mode != "Persistent" or storage_mode != "Shared":
+                    raise MolnsUtilException("Acceptable values for 'storage_mode' are 'Persistent' or 'Shared'")
+                self.storage_mode = storage_mode
+            elif self.storage_mode != storage_mode:
+                raise MolnsUtilException("Storage mode already set to {0}, can not mix storage modes".format(self.storage_mode))
             # Do we have enough trajectores yet?
             if number_of_realizations is None and self.number_of_realizations == 0:
                 raise MolnsUtilException("number_of_realizations is zero")
@@ -797,21 +806,33 @@ class DistributedEnsemble():
         """ Determine a optimal chunk size. """
         return int(max(1, round(number_of_realizations/float(self.num_engines))))
 
-    # TODO: take a hard look at the following functions
-    def rebalance_chunk_list(self):
-        """ It seems like it can be necessary to be able to rebalance the chunk list if
-            the number of engines change. Like if you suddenly have more engines than chunks, you
-            want to create more chunks. """
-
     def _clear_cache(self):
         """ Remove all cached result objects on the engines. """
         pass
         # TODO
     
     def delete_realizations(self):
-        """ Delete realizations from the object store. """
-        pass
-        # TODO
+        """ Delete realizations from the storage. """
+        if self.storage_mode is None:
+            return
+        elif self.storage_mode == "Shared":
+            ss = SharedStorage()
+        elif self.storage_mode == "Persistent":
+            ss = PersistentStorage()
+            
+        for param_set_id in self.result_list:
+            for filename in self.result_list[param_set_id]:
+                try:
+                    ss.delete(filename)
+                except OSError as e:
+                    pass
+
+    def __del__(self):
+        """ Deconstructor. """
+        try:
+            self.delete_realizations()
+        except Exception as e:
+            pass
 
 
 
