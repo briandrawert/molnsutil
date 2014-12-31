@@ -210,9 +210,9 @@ class SwiftProvider():
         self.connection.delete_object(self.bucket_name, object_name)
 
     def delete_all(self):
-        (response, obj_list) = ps.provider.connection.get_container(ps.provider.bucket_name)
+        (response, obj_list) = self.connection.get_container(self.bucket_name)
         for obj in obj_list:
-            ps.provider.connection.delete_object(ps.provider.bucket_name, obj['name'])
+            self.connection.delete_object(self.bucket_name, obj['name'])
         return "{0} object deleted".format(len(obj_list))
 
     def list(self):
