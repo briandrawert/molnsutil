@@ -1,17 +1,17 @@
-""" 
+"""
   Utility module for MOLNs.
-  
-  molnsutil contains implementations of a persisitent storage API for 
+
+  molnsutil contains implementations of a persisitent storage API for
   staging objects to an Object Store in the clouds supported by MOLNs.
   This can be used in MOLNs to write variables that are presistent
   between sessions, provides a convenetient way to get data out of the
-  system, and it also provides a means during parallel computations to 
+  system, and it also provides a means during parallel computations to
   stage data so that it is visible to all compute engines, in contrast
   to using the local scratch space on the engines.
 
   molnsutil also contains parallel implementations of common Monte Carlo computational
   workflows, such as the generaion of ensembles and esitmation of moments.
-  
+
 """
 
 
@@ -54,7 +54,7 @@ import json
 #
 #     'aws_access_key_id' : AWS access key
 #     'aws_secret_access_key' : AWS private key
-#   s3.json needs to be created and put in .molns/s3.json in the root of the home directory. 
+#   s3.json needs to be created and put in .molns/s3.json in the root of the home directory.
 
 import os
 with open(os.environ['HOME']+'/.molns/s3.json','r') as fh:
@@ -64,10 +64,10 @@ with open(os.environ['HOME']+'/.molns/s3.json','r') as fh:
 class LocalStorage():
     """ This class provides an abstraction for storing and reading objects on/from
         the ephemeral storage. """
-    
+
     def __init__(self, folder_name="/home/ubuntu/localarea"):
         self.folder_name = folder_name
-	
+
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
             cloud.serialization.cloudpickle.dump(data,fh)
@@ -83,11 +83,11 @@ class LocalStorage():
 class SharedStorage():
     """ This class provides an abstraction for storing and reading objects on/from
         the sshfs mounted storage on the controller. """
-    
+
     def __init__(self, serialization_method="cloudpickle"):
         self.folder_name = "/home/ubuntu/shared"
         self.serialization_method = serialization_method
-	
+
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
             if self.serialization_method == "cloudpickle":
@@ -114,7 +114,7 @@ class S3Provider():
                                  **s3config['credentials']
                                  )
         self.set_bucket(bucket_name)
-    
+
     def set_bucket(self, bucket_name=None):
         if bucket_name is None:
             self.bucket_name = "molns_bucket_{0}".format(str(uuid.uuid1()))
@@ -172,7 +172,7 @@ class SwiftProvider():
     def __init__(self, bucket_name):
         self.connection = swiftclient.client.Connection(auth_version=2.0,**s3config['credentials'])
         self.set_bucket(bucket_name)
-    
+
     def set_bucket(self,bucket_name):
         self.bucket_name = bucket_name
         if not bucket_name:
@@ -187,7 +187,7 @@ class SwiftProvider():
                     bucket = self.create_bucket(bucket_name)
                 except Exception, e:
                     raise MolnsUtilStorageException("Failed to create/set bucket in the object store."+str(e))
-            
+
             self.bucket = bucket
 
 
@@ -196,7 +196,8 @@ class SwiftProvider():
         return bucket
 
     def get_all_buckets(self):
-        """ List all bucket in this provider. """
+        (response, bucket_list) = ps.provider.connection.get_account()
+        return [b['name'] for b in bucket_list]
 
     def put(self, object_name, data):
         self.connection.put_object(self.bucket_name, object_name, data)
@@ -209,10 +210,14 @@ class SwiftProvider():
         self.connection.delete_object(self.bucket_name, object_name)
 
     def delete_all(self):
-        print self.connection.head_container(self.bucket_name)
+        (response, obj_list) = ps.provider.connection.get_container(ps.provider.bucket_name)
+        for obj in obj_list:
+            ps.provider.connection.delete_object(ps.provider.bucket_name, obj['name'])
+        return "{0} object deleted".format(len(obj_list))
 
     def list(self):
-        """ TODO: implement. """
+        (response, obj_list) = self.connection.get_container(self.bucket_name)
+        return [obj['name'] for obj in obj_list]
 
     def close(self):
         self.connection.close()
@@ -228,7 +233,7 @@ class PersistentStorage():
     """
 
     def __init__(self, bucket_name=None):
-        
+
         if bucket_name is None:
             # try reading it from the config file
             try:
@@ -239,11 +244,11 @@ class PersistentStorage():
             self.bucket_name = bucket_name
         self.provider_type = s3config['provider_type']
         self.initialized = False
-        
+
     def setup_provider(self):
         if self.initialized:
             return
-    
+
         if self.provider_type == 'EC2':
             self.provider = S3Provider(self.bucket_name)
         # self.provider = S3Provider()
@@ -273,22 +278,22 @@ class PersistentStorage():
                     bucket = self.provider.create_bucket(bucket_name)
                 except Exception, e:
                     raise MolnsUtilStorageException("Failed to create/set bucket in the object store: "+str(e))
-                        
+
         self.bucket = bucket
 
     def put(self, name, data):
         self.setup_provider()
         self.provider.put(name, cloud.serialization.cloudpickle.dumps(data))
-    
+
     def get(self, name, validate=False):
         self.setup_provider()
         return cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
-    
+
     def delete(self, name):
         """ Delete an object. """
         self.setup_provider()
         self.provider.delete(name)
-    
+
     def list(self):
         """ List all containers. """
         self.setup_provider()
@@ -304,7 +309,7 @@ class CachedPersistentStorage(PersistentStorage):
     def __init__(self, bucket_name=None):
         PersistentStorage.__init__(self,bucket_name)
         self.cache = LocalStorage(folder_name = "/mnt/molnsarea/cache")
-    
+
     def get(self, name, validate=False):
         self.setup_provider()
         # Try to read it form cache
@@ -413,17 +418,17 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         assigned a random filename. The default behavior is to write the
         files to the Shared storage location (global non-persistent). Optionally, files can be
         written to the Object Store (global persistent), storage_model="Persistent"
-        
+
         Returns: a list of filenames for the serialized result objects.
-        
+
         """
-    
+
     import pyurdme
     from pyurdme.nsmsolver import NSMSolver
     import sys
     import uuid
     from molnsutil import PersistentStorage, LocalStorage, SharedStorage
-    
+
     if storage_mode=="Shared":
         storage  = SharedStorage()
     elif storage_mode=="Persistent":
@@ -454,7 +459,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
             filenames.append(filename)
         except:
             raise
-    
+
     return {'filenames':filenames, 'param_set_id':param_set_id}
 
 def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_results=False):
@@ -463,11 +468,11 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
         look for the result object in the local ephemeral storage (cache),
         then in the Shared area (global non-persistent), then in the
         Object Store (global persistent).
-        
+
         If cache_results=True, then result objects will be written
         to the local epehemeral storage (file cache), so subsequent
         postprocessing jobs may run faster.
-        
+
         """
     import dill
     import numpy
@@ -480,7 +485,7 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
     num_processed=0
     res = None
     result = None
-    
+
     for i,filename in enumerate(results):
         enotes = ''
         result = None
@@ -488,7 +493,7 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
             result = ls.get(filename)
         except Exception as e:
             enotes += "In fetching from local store, caught  {0}: {1}\n".format(type(e),e)
-        
+
         if result is None:
             try:
                 result = ss.get(filename)
@@ -525,7 +530,7 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
 
 class DistributedEnsemble():
     """ A class to provide an API for execution of a distributed ensemble. """
-    
+
     def __init__(self, model_class=None, parameters=None, client=None, num_engines=None):
         """ Constructor """
         self.my_class_name = 'DistributedEnsemble'
@@ -539,7 +544,7 @@ class DistributedEnsemble():
         # Set the Ipython.parallel client
         self.num_engines = num_engines
         self._update_client(client)
-    
+
     def generate_seed_base(self):
         """ Create a random number and truncate to 64 bits. """
         x = int(uuid.uuid4())
@@ -575,7 +580,7 @@ class DistributedEnsemble():
         self.seed_base = state['seed_base']
         self.result_list = state['result_list']
         self.storage_mode = state['storage_mode']
-    
+
     #--------------------------
     # MAIN FUNCTION
     #--------------------------
@@ -601,7 +606,7 @@ class DistributedEnsemble():
                 print "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(self.number_of_realizations*len(self.parameters), chunk_size)
             else:
                 progress_bar=False
-            
+
             # chunks per parameter
             num_chunks = int(math.ceil(self.number_of_realizations/float(chunk_size)))
             chunks = [chunk_size]*(num_chunks-1)
@@ -617,7 +622,7 @@ class DistributedEnsemble():
                 pparams.extend( [param]*num_chunks )
                 for i in range(num_chunks):
                     presult_list.append( self.result_list[id][i*chunk_size:(i+1)*chunk_size] )
-            
+
             results = self.lv.map_async(map_and_aggregate, presult_list, param_set_ids, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
         else:
             # If we don't store the realizations (or use the stored ones)
@@ -627,7 +632,7 @@ class DistributedEnsemble():
                 progress_bar=False
             else:
                 print "Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})".format(number_of_realizations,chunk_size)
-            
+
             # chunks per parameter
             num_chunks = int(math.ceil(number_of_realizations/float(chunk_size)))
             chunks = [chunk_size]*(num_chunks-1)
@@ -640,7 +645,7 @@ class DistributedEnsemble():
             for id, param in enumerate(self.parameters):
                 param_set_ids.extend( [id]*num_chunks )
                 pparams.extend( [param]*num_chunks )
-            
+
             seed_list = []
             for _ in range(len(self.parameters)):
                 #need to do it this way cause the number of run per chunk might not be even
@@ -649,7 +654,7 @@ class DistributedEnsemble():
             #def run_ensemble_map_and_aggregate(model_class, parameters, seed_base, number_of_trajectories, mapper, aggregator=None):
             results  = self.lv.map_async(run_ensemble_map_and_aggregate, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [mapper]*num_pchunks, [aggregator]*num_pchunks)
 
-    
+
         if progress_bar:
             # This should be factored out somehow.
             divid = str(uuid.uuid4())
@@ -659,7 +664,7 @@ class DistributedEnsemble():
                           </div>
                           """.format(divid))
             display(pb)
-        
+
         # We process the results as they arrive.
         mapped_results = {}
         for i,rset in enumerate(results):
@@ -689,7 +694,7 @@ class DistributedEnsemble():
 
 
 
-    
+
     #--------------------------
     def add_realizations(self, number_of_realizations=None, chunk_size=None, verbose=True, progress_bar=True, storage_mode="Shared"):
         """ Add a number of realizations to the ensemble. """
@@ -697,7 +702,7 @@ class DistributedEnsemble():
             raise MolnsUtilException("No number_of_realizations specified")
         if type(number_of_realizations) is not type(1):
             raise MolnsUtilException("number_of_realizations must be an integer")
-        
+
         if chunk_size is None:
             chunk_size = self._determine_chunk_size(number_of_realizations)
 
@@ -708,9 +713,9 @@ class DistributedEnsemble():
                 print "Generating {0} realizations of the model at {1} parameter points (chunk size={2})".format(number_of_realizations, len(self.parameters), chunk_size)
             else:
                 print "Generating {0} realizations of the model (chunk size={1})".format(number_of_realizations,chunk_size)
-        
+
         self.number_of_realizations += number_of_realizations
-        
+
         num_chunks = int(math.ceil(number_of_realizations/float(chunk_size)))
         chunks = [chunk_size]*(num_chunks-1)
         chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
@@ -722,14 +727,14 @@ class DistributedEnsemble():
         for id, param in enumerate(self.parameters):
             param_set_ids.extend( [id]*num_chunks )
             pparams.extend( [param]*num_chunks )
-        
+
         seed_list = []
         for _ in range(len(self.parameters)):
             #need to do it this way cause the number of run per chunk might not be even
             seed_list.extend(range(self.seed_base, self.seed_base+number_of_realizations, chunk_size))
             self.seed_base += number_of_realizations
         results  = self.lv.map_async(run_ensemble, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [storage_mode]*num_pchunks)
-        
+
         if progress_bar:
             # This should be factored out somehow.
             divid = str(uuid.uuid4())
@@ -739,7 +744,7 @@ class DistributedEnsemble():
                           </div>
                           """.format(divid))
             display(pb)
-        
+
         # We process the results as they arrive.
         for i,ret in enumerate(results):
             r = ret['filenames']
@@ -749,12 +754,12 @@ class DistributedEnsemble():
             self.result_list[param_set_id].extend(r)
             if progress_bar:
                 display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(i+1)/len(results))))
-        
-        
-        return {'wall_time':results.wall_time,'serial_time':results.serial_time}
-    
 
-    
+
+        return {'wall_time':results.wall_time,'serial_time':results.serial_time}
+
+
+
     #-------- Convenience functions with builtin mappers/reducers  ------------------
 
     def mean_variance(self, mapper=None, number_of_realizations=None, chunk_size=None, verbose=True, store_realizations=True, storage_mode="Shared", cache_results=False):
@@ -766,13 +771,13 @@ class DistributedEnsemble():
         """ Compute the mean of the function g(X) based on number_of_realizations realizations
             in the ensemble. It has to make sense to say g(result1)+g(result2). """
         return self.run(mapper=mapper, aggregator=builtin_aggregator_add, reducer=builtin_reducer_mean, number_of_realizations=number_of_realizations, chunk_size=chunk_size, verbose=verbose, store_realizations=store_realizations, storage_mode=storage_mode, cache_results=cache_results)
-   
+
 
     def moment(self, g=None, order=1, number_of_realizations=None):
         """ Compute the moment of order 'order' of g(X), using number_of_realizations
             realizations in the ensemble. """
         raise Exception('TODO')
-    
+
     def histogram_density(self, g=None, number_of_realizations=None):
         """ Estimate the probability density function of g(X) based on number_of_realizations realizations
             in the ensemble. """
@@ -797,7 +802,7 @@ class DistributedEnsemble():
             else:
                 engines = self.c.ids[:self.num_engines]
                 self.lv = self.c.load_balanced_view(engines)
-        
+
         # Set the number of times a failed task is retried. This makes it possible to recover
         # from engine failure.
         self.lv.retries=3
@@ -810,7 +815,7 @@ class DistributedEnsemble():
         """ Remove all cached result objects on the engines. """
         pass
         # TODO
-    
+
     def delete_realizations(self):
         """ Delete realizations from the storage. """
         if self.storage_mode is None:
@@ -875,7 +880,7 @@ class ParameterSweep(DistributedEnsemble):
                         pkey_ndxs[i] = 0
                     else:
                         break
-        
+
         elif type(parameters) is type([]):
             self.parameters = parameters
         else:
@@ -921,11 +926,11 @@ class ParameterSweepResultList(list):
 
 
 if __name__ == '__main__':
-    
+
     ga = PersistentStorage()
     #print ga.list_buckets()
     ga.put('testtest.pyb',"fdkjshfkjdshfjdhsfkjhsdkjfhdskjf")
-    print ga.get('testtest.pyb') 
+    print ga.get('testtest.pyb')
     ga.delete('testtest.pyb')
     ga.list()
     ga.put('file1', "fdlsfjdkls")
