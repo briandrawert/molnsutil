@@ -36,6 +36,8 @@ import IPython.parallel
 import uuid
 from IPython.display import HTML, Javascript, display
 
+import itertools
+
 class MolnsUtilException(Exception):
     pass
 
@@ -879,6 +881,9 @@ class ParameterSweep(DistributedEnsemble):
               e.g.: {'arg1':[1,2,3],'arg2':[1,2,3]}  will produce 9 parameter points.
             If it is a list, where each element of the list is a dict
             """
+
+#	DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines)
+
         self.my_class_name = 'ParameterSweep'
         self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
         self.number_of_realizations = 0
@@ -888,25 +893,40 @@ class ParameterSweep(DistributedEnsemble):
         
         # process the parameters
         if type(parameters) is type({}):
-            pkeys = parameters.keys()
-            pkey_lens = [0]*len(pkeys)
-            pkey_ndxs = [0]*len(pkeys)
-            for i,key in enumerate(pkeys):
-                pkey_lens[i] = len(parameters[key])
-            num_params = sum(pkey_lens)
-            for _ in range(num_params):
-                param = {}
-                for i,key in enumerate(pkeys):
-                    param[key] = parameters[key][pkey_ndxs[i]]
-                self.parameters.append(param)
-                # incriment indexes
-                for i,key in enumerate(pkeys):
-                    pkey_ndxs[i] += 1
-                    if pkey_ndxs[i] >= pkey_lens[i]:
-                        pkey_ndxs[i] = 0
-                    else:
-                        break
+            #pkeys = parameters.keys()
+            #pkey_lens = [0]*len(pkeys)
+            #pkey_ndxs = [0]*len(pkeys)
+            #for i,key in enumerate(pkeys):
+            #    pkey_lens[i] = len(parameters[key])
+            #num_params = sum(pkey_lens)
+            #for _ in range(num_params):
+            #    param = {}
+            #    for i,key in enumerate(pkeys):
+            #        param[key] = parameters[key][pkey_ndxs[i]]
+            #    self.parameters.append(param)
+            #    # incriment indexes
+            #    for i,key in enumerate(pkeys):
+            #        pkey_ndxs[i] += 1
+            #        if pkey_ndxs[i] >= pkey_lens[i]:
+            #            pkey_ndxs[i] = 0
+            #        else:
+            #            break
+	  
+	   vals = []
+	   keys = []
+	   for key, value in parameters.items():
+  		keys.append(key) 
+  		vals.append(value)  
+	   pspace=itertools.product(*vals)
 
+	   paramsets = []
+
+	   for p in pspace:
+    		pset = {}
+    		for i,val in enumerate(p):
+        	    pset[keys[i]] = val
+    		paramsets.append(pset)
+           self.parameters = paramsets
         elif type(parameters) is type([]):
             self.parameters = parameters
         else:
