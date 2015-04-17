@@ -880,9 +880,9 @@ class ParameterSweep(DistributedEnsemble):
         
         # process the parameters
         if type(parameters) is type({}):
-          	 vals = []
-             keys = []
-             for key, value in parameters.items():
+            vals = []
+            keys = []
+            for key, value in parameters.items():
                  keys.append(key)
                  vals.append(value)
             pspace=itertools.product(*vals)
