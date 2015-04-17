@@ -445,7 +445,6 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     import sys
     import uuid
     from molnsutil import PersistentStorage, LocalStorage, SharedStorage
-#    import multiprocessing
 
     if storage_mode=="Shared":
         storage  = SharedStorage()
@@ -475,17 +474,10 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
             # We should try to thread this to hide latency in file upload...
             result = solver.run(seed=seed_base+i)
             filename = str(uuid.uuid1())
-            #p = multiprocessing.Process(target=write_file, args=(storage_mode, filename, result))
-            #p.start()
-            # processes.append(p)
-            #pool.apply_async(storage.put, filename, result)
             storage.put(filename, result)
             filenames.append(filename)
         except:
             raise
-
-#    for p in processes:
-#        p.join()
 
     return {'filenames':filenames, 'param_set_id':param_set_id}
 
@@ -867,7 +859,6 @@ class DistributedEnsemble():
             pass
 
 
-
 class ParameterSweep(DistributedEnsemble):
     """ Making parameter sweeps on distributed compute systems easier. """
 
@@ -882,51 +873,29 @@ class ParameterSweep(DistributedEnsemble):
             If it is a list, where each element of the list is a dict
             """
 
-#	DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines)
+        DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines)
 
         self.my_class_name = 'ParameterSweep'
-        self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
-        self.number_of_realizations = 0
-        self.seed_base = self.generate_seed_base()
-        self.result_list = {}
         self.parameters = []
         
         # process the parameters
         if type(parameters) is type({}):
-            #pkeys = parameters.keys()
-            #pkey_lens = [0]*len(pkeys)
-            #pkey_ndxs = [0]*len(pkeys)
-            #for i,key in enumerate(pkeys):
-            #    pkey_lens[i] = len(parameters[key])
-            #num_params = sum(pkey_lens)
-            #for _ in range(num_params):
-            #    param = {}
-            #    for i,key in enumerate(pkeys):
-            #        param[key] = parameters[key][pkey_ndxs[i]]
-            #    self.parameters.append(param)
-            #    # incriment indexes
-            #    for i,key in enumerate(pkeys):
-            #        pkey_ndxs[i] += 1
-            #        if pkey_ndxs[i] >= pkey_lens[i]:
-            #            pkey_ndxs[i] = 0
-            #        else:
-            #            break
-	  
-	   vals = []
-	   keys = []
-	   for key, value in parameters.items():
-  		keys.append(key) 
-  		vals.append(value)  
-	   pspace=itertools.product(*vals)
+          	 vals = []
+             keys = []
+             for key, value in parameters.items():
+                 keys.append(key)
+                 vals.append(value)
+            pspace=itertools.product(*vals)
 
-	   paramsets = []
+            paramsets = []
 
-	   for p in pspace:
-    		pset = {}
-    		for i,val in enumerate(p):
-        	    pset[keys[i]] = val
-    		paramsets.append(pset)
-           self.parameters = paramsets
+            for p in pspace:
+                pset = {}
+                for i,val in enumerate(p):
+                    pset[keys[i]] = val
+                paramsets.append(pset)
+
+            self.parameters = paramsets
         elif type(parameters) is type([]):
             self.parameters = parameters
         else:
