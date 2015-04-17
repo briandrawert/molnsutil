@@ -885,6 +885,7 @@ class ParameterSweep(DistributedEnsemble):
         self.seed_base = self.generate_seed_base()
         self.result_list = {}
         self.parameters = []
+        
         # process the parameters
         if type(parameters) is type({}):
             pkeys = parameters.keys()
