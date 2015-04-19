@@ -25,7 +25,7 @@ from boto.s3.key import Key
 import uuid
 import math
 import dill
-import molnsutil.molns_cloudpickle as cloudpickle
+import molns_cloudpickle as cloudpickle
 
 import random
 import copy
