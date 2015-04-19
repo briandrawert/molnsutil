@@ -35,12 +35,13 @@ import IPython.parallel
 import uuid
 from IPython.display import HTML, Javascript, display
 
+import itertools
+
 class MolnsUtilException(Exception):
     pass
 
 class MolnsUtilStorageException(Exception):
     pass
-
 
 try:
     import dill as pickle
@@ -49,6 +50,8 @@ except:
 
 import json
 
+
+import multiprocessing
 #     s3.json is a JSON file that contains the follwing info:
 #
 #     'aws_access_key_id' : AWS access key
@@ -410,6 +413,20 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
             raise MolnsUtilException(notes)
     return {'result':res, 'param_set_id':param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
 
+
+def write_file(storage_mode,filename, result):
+    
+    from molnsutil import LocalStorage, SharedStorage, PersistentStorage
+
+    if storage_mode=="Shared":
+        storage  = SharedStorage()
+    elif storage_mode=="Persistent":
+        storage = PersistentStorage()
+    else:
+        raise MolnsUtilException("Unknown storage type '{0}'".format(storage_mode))
+    
+    storage.put(filename, result)
+
 def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_trajectories, storage_mode="Shared"):
     """ Generates an ensemble consisting of number_of_trajectories realizations by
         running pyurdme nt number of times. The resulting pyurdme result objects
@@ -450,8 +467,10 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     # Run the solver
     solver = NSMSolver(model)
     filenames = []
+    processes=[]
     for i in xrange(number_of_trajectories):
         try:
+            # We should try to thread this to hide latency in file upload...
             result = solver.run(seed=seed_base+i)
             filename = str(uuid.uuid1())
             storage.put(filename, result)
@@ -839,7 +858,6 @@ class DistributedEnsemble():
             pass
 
 
-
 class ParameterSweep(DistributedEnsemble):
     """ Making parameter sweeps on distributed compute systems easier. """
 
@@ -853,33 +871,30 @@ class ParameterSweep(DistributedEnsemble):
               e.g.: {'arg1':[1,2,3],'arg2':[1,2,3]}  will produce 9 parameter points.
             If it is a list, where each element of the list is a dict
             """
+
+        DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines)
+
         self.my_class_name = 'ParameterSweep'
-        self.model_class = cloudpickle.dumps(model_class)
-        self.number_of_realizations = 0
-        self.seed_base = self.generate_seed_base()
-        self.result_list = {}
         self.parameters = []
+        
         # process the parameters
         if type(parameters) is type({}):
-            pkeys = parameters.keys()
-            pkey_lens = [0]*len(pkeys)
-            pkey_ndxs = [0]*len(pkeys)
-            for i,key in enumerate(pkeys):
-                pkey_lens[i] = len(parameters[key])
-            num_params = sum(pkey_lens)
-            for _ in range(num_params):
-                param = {}
-                for i,key in enumerate(pkeys):
-                    param[key] = parameters[key][pkey_ndxs[i]]
-                self.parameters.append(param)
-                # incriment indexes
-                for i,key in enumerate(pkeys):
-                    pkey_ndxs[i] += 1
-                    if pkey_ndxs[i] >= pkey_lens[i]:
-                        pkey_ndxs[i] = 0
-                    else:
-                        break
+            vals = []
+            keys = []
+            for key, value in parameters.items():
+                 keys.append(key)
+                 vals.append(value)
+            pspace=itertools.product(*vals)
 
+            paramsets = []
+
+            for p in pspace:
+                pset = {}
+                for i,val in enumerate(p):
+                    pset[keys[i]] = val
+                paramsets.append(pset)
+
+            self.parameters = paramsets
         elif type(parameters) is type([]):
             self.parameters = parameters
         else:
