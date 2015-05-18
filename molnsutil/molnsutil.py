@@ -25,8 +25,7 @@ from boto.s3.key import Key
 import uuid
 import math
 import dill
-import cloud
-logging.getLogger('Cloud').setLevel(logging.ERROR)
+import molns_cloudpickle as cloudpickle
 
 import random
 import copy
@@ -73,11 +72,11 @@ class LocalStorage():
 
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
-            cloud.serialization.cloudpickle.dump(data,fh)
+            cloudpickle.dump(data,fh)
 
     def get(self, filename):
         with open(self.folder_name+"/"+filename, 'rb') as fh:
-            data = cloud.serialization.cloudpickle.load(fh)
+            data = cloudpickle.load(fh)
         return data
 
     def delete(self,filename):
@@ -94,14 +93,14 @@ class SharedStorage():
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
             if self.serialization_method == "cloudpickle":
-                cloud.serialization.cloudpickle.dump(data,fh)
+                cloudpickle.dump(data,fh)
             elif self.serialization_method == "json":
                 json.dump(data,fh)
 
     def get(self, filename):
         with open(self.folder_name+"/"+filename, 'rb') as fh:
             if self.serialization_method == "cloudpickle":
-                data = cloud.serialization.cloudpickle.loads(fh.read())
+                data = cloudpickle.loads(fh.read())
             elif self.serialization_method == "json":
                 data = json.loads(fh.read())
         return data
@@ -286,11 +285,11 @@ class PersistentStorage():
 
     def put(self, name, data):
         self.setup_provider()
-        self.provider.put(name, cloud.serialization.cloudpickle.dumps(data))
+        self.provider.put(name, cloudpickle.dumps(data))
 
     def get(self, name, validate=False):
         self.setup_provider()
-        return cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
+        return cloudpickle.loads(self.provider.get(name, validate))
 
     def delete(self, name):
         """ Delete an object. """
@@ -317,9 +316,9 @@ class CachedPersistentStorage(PersistentStorage):
         self.setup_provider()
         # Try to read it form cache
         try:
-            data = cloud.serialization.cloudpickle.loads(self.cache.get(name))
+            data = cloudpickle.loads(self.cache.get(name))
         except: # if not there, read it from the Object Store and write it to the cache
-            data = cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
+            data = cloudpickle.loads(self.provider.get(name, validate))
             try:
                 self.cache.put(name, data)
             except:
@@ -386,7 +385,7 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
         aggregator = builtin_aggregator_list_append
     # Create the model
     try:
-        model_class_cls = cloud.serialization.cloudpickle.loads(model_class)
+        model_class_cls = cloudpickle.loads(model_class)
         if parameters is not None:
             model = model_class_cls(**parameters)
         else:
@@ -454,7 +453,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         raise MolnsUtilException("Unknown storage type '{0}'".format(storage_mode))
     # Create the model
     try:
-        model_class_cls = cloud.serialization.cloudpickle.loads(model_class)
+        model_class_cls = cloudpickle.loads(model_class)
         if parameters is not None:
             model = model_class_cls(**parameters)
         else:
@@ -553,7 +552,7 @@ class DistributedEnsemble():
     def __init__(self, model_class=None, parameters=None, client=None, num_engines=None):
         """ Constructor """
         self.my_class_name = 'DistributedEnsemble'
-        self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
+        self.model_class = cloudpickle.dumps(model_class)
         self.parameters = [parameters]
         self.number_of_realizations = 0
         self.seed_base = self.generate_seed_base()
