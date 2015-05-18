@@ -59,9 +59,13 @@ import multiprocessing
 #   s3.json needs to be created and put in .molns/s3.json in the root of the home directory.
 
 import os
-with open(os.environ['HOME']+'/.molns/s3.json','r') as fh:
-    s3config = json.loads(fh.read())
 
+try:
+    with open(os.environ['HOME']+'/.molns/s3.json','r') as fh:
+        s3config = json.loads(fh.read())
+except:
+    logging.warning("Credentials file "+os.environ['HOME']+'/.molns/s3.json'+' missing. You will not be able to connect to S3 or Swift. Please create this file.')
+    pass
 
 class LocalStorage():
     """ This class provides an abstraction for storing and reading objects on/from
