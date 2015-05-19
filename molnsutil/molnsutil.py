@@ -24,7 +24,6 @@ logging.basicConfig(filename="boto.log", level=logging.DEBUG)
 from boto.s3.key import Key
 import uuid
 import math
-import dill
 import cloud
 logging.getLogger('Cloud').setLevel(logging.ERROR)
 
@@ -57,8 +56,10 @@ import json
 #   s3.json needs to be created and put in .molns/s3.json in the root of the home directory.
 
 import os
-with open(os.environ['HOME']+'/.molns/s3.json','r') as fh:
-    s3config = json.loads(fh.read())
+def get_s3config():
+    with open(os.environ['HOME']+'/.molns/s3.json','r') as fh:
+        s3config = json.loads(fh.read())
+    return s3config
 
 
 class LocalStorage():
@@ -109,6 +110,7 @@ class SharedStorage():
 
 class S3Provider():
     def __init__(self, bucket_name):
+        s3config = get_s3config()
         self.connection = S3Connection(is_secure=False,
                                  calling_format=boto.s3.connection.OrdinaryCallingFormat(),
                                  **s3config['credentials']
@@ -170,6 +172,7 @@ class S3Provider():
 
 class SwiftProvider():
     def __init__(self, bucket_name):
+        s3config = get_s3config()
         self.connection = swiftclient.client.Connection(auth_version=2.0,**s3config['credentials'])
         self.set_bucket(bucket_name)
 
@@ -233,7 +236,7 @@ class PersistentStorage():
     """
 
     def __init__(self, bucket_name=None):
-
+        s3config = get_s3config()
         if bucket_name is None:
             # try reading it from the config file
             try:
