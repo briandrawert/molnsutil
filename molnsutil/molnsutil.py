@@ -25,8 +25,7 @@ from boto.s3.key import Key
 import uuid
 import math
 import dill
-import cloud
-logging.getLogger('Cloud').setLevel(logging.ERROR)
+import molns_cloudpickle as cloudpickle
 
 import random
 import copy
@@ -36,12 +35,13 @@ import IPython.parallel
 import uuid
 from IPython.display import HTML, Javascript, display
 
+import itertools
+
 class MolnsUtilException(Exception):
     pass
 
 class MolnsUtilStorageException(Exception):
     pass
-
 
 try:
     import dill as pickle
@@ -50,6 +50,8 @@ except:
 
 import json
 
+
+import multiprocessing
 #     s3.json is a JSON file that contains the follwing info:
 #
 #     'aws_access_key_id' : AWS access key
@@ -57,9 +59,13 @@ import json
 #   s3.json needs to be created and put in .molns/s3.json in the root of the home directory.
 
 import os
-with open(os.environ['HOME']+'/.molns/s3.json','r') as fh:
-    s3config = json.loads(fh.read())
 
+try:
+    with open(os.environ['HOME']+'/.molns/s3.json','r') as fh:
+        s3config = json.loads(fh.read())
+except:
+    logging.warning("Credentials file "+os.environ['HOME']+'/.molns/s3.json'+' missing. You will not be able to connect to S3 or Swift. Please create this file.')
+    pass
 
 class LocalStorage():
     """ This class provides an abstraction for storing and reading objects on/from
@@ -70,11 +76,11 @@ class LocalStorage():
 
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
-            cloud.serialization.cloudpickle.dump(data,fh)
+            cloudpickle.dump(data,fh)
 
     def get(self, filename):
         with open(self.folder_name+"/"+filename, 'rb') as fh:
-            data = cloud.serialization.cloudpickle.load(fh)
+            data = cloudpickle.load(fh)
         return data
 
     def delete(self,filename):
@@ -91,14 +97,14 @@ class SharedStorage():
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
             if self.serialization_method == "cloudpickle":
-                cloud.serialization.cloudpickle.dump(data,fh)
+                cloudpickle.dump(data,fh)
             elif self.serialization_method == "json":
                 json.dump(data,fh)
 
     def get(self, filename):
         with open(self.folder_name+"/"+filename, 'rb') as fh:
             if self.serialization_method == "cloudpickle":
-                data = cloud.serialization.cloudpickle.loads(fh.read())
+                data = cloudpickle.loads(fh.read())
             elif self.serialization_method == "json":
                 data = json.loads(fh.read())
         return data
@@ -283,11 +289,11 @@ class PersistentStorage():
 
     def put(self, name, data):
         self.setup_provider()
-        self.provider.put(name, cloud.serialization.cloudpickle.dumps(data))
+        self.provider.put(name, cloudpickle.dumps(data))
 
     def get(self, name, validate=False):
         self.setup_provider()
-        return cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
+        return cloudpickle.loads(self.provider.get(name, validate))
 
     def delete(self, name):
         """ Delete an object. """
@@ -314,9 +320,9 @@ class CachedPersistentStorage(PersistentStorage):
         self.setup_provider()
         # Try to read it form cache
         try:
-            data = cloud.serialization.cloudpickle.loads(self.cache.get(name))
+            data = cloudpickle.loads(self.cache.get(name))
         except: # if not there, read it from the Object Store and write it to the cache
-            data = cloud.serialization.cloudpickle.loads(self.provider.get(name, validate))
+            data = cloudpickle.loads(self.provider.get(name, validate))
             try:
                 self.cache.put(name, data)
             except:
@@ -383,7 +389,7 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
         aggregator = builtin_aggregator_list_append
     # Create the model
     try:
-        model_class_cls = cloud.serialization.cloudpickle.loads(model_class)
+        model_class_cls = cloudpickle.loads(model_class)
         if parameters is not None:
             model = model_class_cls(**parameters)
         else:
@@ -411,6 +417,20 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
             raise MolnsUtilException(notes)
     return {'result':res, 'param_set_id':param_set_id, 'num_sucessful':num_processed, 'num_failed':number_of_trajectories-num_processed}
 
+
+def write_file(storage_mode,filename, result):
+    
+    from molnsutil import LocalStorage, SharedStorage, PersistentStorage
+
+    if storage_mode=="Shared":
+        storage  = SharedStorage()
+    elif storage_mode=="Persistent":
+        storage = PersistentStorage()
+    else:
+        raise MolnsUtilException("Unknown storage type '{0}'".format(storage_mode))
+    
+    storage.put(filename, result)
+
 def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_trajectories, storage_mode="Shared"):
     """ Generates an ensemble consisting of number_of_trajectories realizations by
         running pyurdme nt number of times. The resulting pyurdme result objects
@@ -437,7 +457,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         raise MolnsUtilException("Unknown storage type '{0}'".format(storage_mode))
     # Create the model
     try:
-        model_class_cls = cloud.serialization.cloudpickle.loads(model_class)
+        model_class_cls = cloudpickle.loads(model_class)
         if parameters is not None:
             model = model_class_cls(**parameters)
         else:
@@ -451,8 +471,10 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     # Run the solver
     solver = NSMSolver(model)
     filenames = []
+    processes=[]
     for i in xrange(number_of_trajectories):
         try:
+            # We should try to thread this to hide latency in file upload...
             result = solver.run(seed=seed_base+i)
             filename = str(uuid.uuid1())
             storage.put(filename, result)
@@ -534,7 +556,7 @@ class DistributedEnsemble():
     def __init__(self, model_class=None, parameters=None, client=None, num_engines=None):
         """ Constructor """
         self.my_class_name = 'DistributedEnsemble'
-        self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
+        self.model_class = cloudpickle.dumps(model_class)
         self.parameters = [parameters]
         self.number_of_realizations = 0
         self.seed_base = self.generate_seed_base()
@@ -840,7 +862,6 @@ class DistributedEnsemble():
             pass
 
 
-
 class ParameterSweep(DistributedEnsemble):
     """ Making parameter sweeps on distributed compute systems easier. """
 
@@ -854,33 +875,30 @@ class ParameterSweep(DistributedEnsemble):
               e.g.: {'arg1':[1,2,3],'arg2':[1,2,3]}  will produce 9 parameter points.
             If it is a list, where each element of the list is a dict
             """
+
+        DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines)
+
         self.my_class_name = 'ParameterSweep'
-        self.model_class = cloud.serialization.cloudpickle.dumps(model_class)
-        self.number_of_realizations = 0
-        self.seed_base = self.generate_seed_base()
-        self.result_list = {}
         self.parameters = []
+        
         # process the parameters
         if type(parameters) is type({}):
-            pkeys = parameters.keys()
-            pkey_lens = [0]*len(pkeys)
-            pkey_ndxs = [0]*len(pkeys)
-            for i,key in enumerate(pkeys):
-                pkey_lens[i] = len(parameters[key])
-            num_params = sum(pkey_lens)
-            for _ in range(num_params):
-                param = {}
-                for i,key in enumerate(pkeys):
-                    param[key] = parameters[key][pkey_ndxs[i]]
-                self.parameters.append(param)
-                # incriment indexes
-                for i,key in enumerate(pkeys):
-                    pkey_ndxs[i] += 1
-                    if pkey_ndxs[i] >= pkey_lens[i]:
-                        pkey_ndxs[i] = 0
-                    else:
-                        break
+            vals = []
+            keys = []
+            for key, value in parameters.items():
+                 keys.append(key)
+                 vals.append(value)
+            pspace=itertools.product(*vals)
 
+            paramsets = []
+
+            for p in pspace:
+                pset = {}
+                for i,val in enumerate(p):
+                    pset[keys[i]] = val
+                paramsets.append(pset)
+
+            self.parameters = paramsets
         elif type(parameters) is type([]):
             self.parameters = parameters
         else:
