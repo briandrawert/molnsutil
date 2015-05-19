@@ -58,8 +58,6 @@ import multiprocessing
 
 import os
 def get_s3config():
-    with open(os.environ['HOME']+'/.molns/s3.json','r') as fh:
-        s3config = json.loads(fh.read())
     try:
         with open(os.environ['HOME']+'/.molns/s3.json','r') as fh:
             s3config = json.loads(fh.read())
