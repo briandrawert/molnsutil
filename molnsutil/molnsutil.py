@@ -406,13 +406,16 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
     solver = NSMSolver(model)
     res = None
     num_processed = 0
-    for i in range(number_of_trajectories):
+    results = solver.run(seed=seed_base, number_of_trajectories=number_of_trajectories)
+    if not isinstance(results, list):
+        results = [results]
+    #for i in range(number_of_trajectories):
+    for result in results:
         try:
-            result = solver.run(seed=seed_base+i)
             mapres = mapper(result)
             res = aggregator(mapres, res)
             num_processed +=1
-        except TypeError as e:
+        except Exception as e:
             notes = "Error running mapper and aggregator, caught {0}: {1}\n".format(type(e),e)
             notes += "type(mapper) = {0}\n".format(type(mapper))
             notes += "type(aggregator) = {0}\n".format(type(aggregator))
