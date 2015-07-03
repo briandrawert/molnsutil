@@ -475,14 +475,15 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         raise MolnsUtilException(notes)
 
     # Run the solver
-    solver = NSMSolver(model)
+    #solver = NSMSolver(model)
     filenames = []
     processes=[]
     for i in xrange(number_of_trajectories):
         try:
             # We should try to thread this to hide latency in file upload...
-            result = solver.run(seed=seed_base+i)
-            filename = str(uuid.uuid1())
+            #result = solver.run(seed=seed_base+i)
+            result = model.run(seed=seed_base+i)
+	    filename = str(uuid.uuid1())
             storage.put(filename, result)
             filenames.append(filename)
         except:
