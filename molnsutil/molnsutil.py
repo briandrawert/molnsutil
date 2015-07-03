@@ -9,8 +9,19 @@
   stage data so that it is visible to all compute engines, in contrast
   to using the local scratch space on the engines.
 
-  molnsutil also contains parallel implementations of common Monte Carlo computational
-  workflows, such as the generaion of ensembles and esitmation of moments.
+  molnsutil also contains parallel implementations of common Monte Carlo
+  computational workflows, such as the generaion of ensembles and
+  estimation of moments.
+
+  Molnsutil will work for any object that is serializable (e.g. with
+  pickle) and that has a run() function with the arguments 'seed' and
+  'number_of_trajectories'.  Example:
+
+   class MyClass():
+       def run(seed, number_of_trajectories):
+           # return an object or list
+
+  Both the class and the results return from run() must be pickle-able.
 
 """
 
@@ -384,8 +395,6 @@ def builtin_reducer_mean_variance(result_list, parameters=None):
 #----- functions to use for the DistributedEnsemble class ----
 def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_base, number_of_trajectories, mapper, aggregator=None):
     """ Generate an ensemble, then run the mappers are aggreator.  This will not store the results. """
-    import pyurdme
-    from pyurdme.nsmsolver import NSMSolver
     import sys
     import uuid
     if aggregator is None:
@@ -399,14 +408,12 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
             model = model_class_cls()
     except Exception as e:
         notes = "Error instantiation the model class, caught {0}: {1}\n".format(type(e),e)
-        notes += "pyurdme in dir()={0}\n".format('pyurdme' in dir())
         notes +=  "dir={0}\n".format(dir())
         raise MolnsUtilException(notes)
     # Run the solver
-    solver = NSMSolver(model)
     res = None
     num_processed = 0
-    results = solver.run(seed=seed_base, number_of_trajectories=number_of_trajectories)
+    results = model.run(seed=seed_base, number_of_trajectories=number_of_trajectories)
     if not isinstance(results, list):
         results = [results]
     #for i in range(number_of_trajectories):
@@ -439,7 +446,7 @@ def write_file(storage_mode,filename, result):
 
 def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_trajectories, storage_mode="Shared"):
     """ Generates an ensemble consisting of number_of_trajectories realizations by
-        running pyurdme nt number of times. The resulting pyurdme result objects
+        running the model 'nt' number of times. The resulting result objects
         are serialized and written to one of the MOLNs storage locations, each
         assigned a random filename. The default behavior is to write the
         files to the Shared storage location (global non-persistent). Optionally, files can be
@@ -449,8 +456,6 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
 
         """
 
-    import pyurdme
-    from pyurdme.nsmsolver import NSMSolver
     import sys
     import uuid
     from molnsutil import PersistentStorage, LocalStorage, SharedStorage
@@ -470,20 +475,19 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
             model = model_class_cls()
     except Exception as e:
         notes = "Error instantiation the model class, caught {0}: {1}\n".format(type(e),e)
-        notes += "pyurdme in dir()={0}\n".format('pyurdme' in dir())
         notes +=  "dir={0}\n".format(dir())
         raise MolnsUtilException(notes)
 
     # Run the solver
-    #solver = NSMSolver(model)
     filenames = []
     processes=[]
-    for i in xrange(number_of_trajectories):
+    results = model.run(seed=seed_base, number_of_trajectories=number_of_trajectories)
+    if not isinstance(results, list):
+        results = [results]
+    for result in results:
         try:
             # We should try to thread this to hide latency in file upload...
-            #result = solver.run(seed=seed_base+i)
-            result = model.run(seed=seed_base+i)
-	    filename = str(uuid.uuid1())
+            filename = str(uuid.uuid1())
             storage.put(filename, result)
             filenames.append(filename)
         except:
