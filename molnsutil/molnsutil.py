@@ -569,7 +569,7 @@ class DistributedEnsemble():
         self.my_class_name = 'DistributedEnsemble'
         self.model_class = cloudpickle.dumps(model_class)
         self.parameters = [parameters]
-        self.number_of_realizations = 0
+        self.number_of_trajectories = 0
         self.seed_base = self.generate_seed_base()
         self.storage_mode = None
         # A chunk list
@@ -593,7 +593,7 @@ class DistributedEnsemble():
         state = {}
         state['model_class'] = self.model_class
         state['parameters'] = self.parameters
-        state['number_of_realizations'] = self.number_of_realizations
+        state['number_of_trajectories'] = self.number_of_trajectories
         state['seed_base'] = self.seed_base
         state['result_list'] = self.result_list
         state['storage_mode'] = self.storage_mode
@@ -609,7 +609,7 @@ class DistributedEnsemble():
         if state['model_class'] is not self.model_class:
             raise MolnsUtilException("Can only load state of a class that is identical to the original class")
         self.parameters = state['parameters']
-        self.number_of_realizations = state['number_of_realizations']
+        self.number_of_trajectories = state['number_of_trajectories']
         self.seed_base = state['seed_base']
         self.result_list = state['result_list']
         self.storage_mode = state['storage_mode']
@@ -617,7 +617,7 @@ class DistributedEnsemble():
     #--------------------------
     # MAIN FUNCTION
     #--------------------------
-    def run(self, mapper, aggregator=None, reducer=None, number_of_realizations=None, chunk_size=None, verbose=True, progress_bar=True, store_realizations=True, storage_mode="Shared", cache_results=False):
+    def run(self, mapper, aggregator=None, reducer=None, number_of_trajectories=None, chunk_size=None, verbose=True, progress_bar=True, store_realizations=True, storage_mode="Shared", cache_results=False):
         """ Main entry point """
         if store_realizations:
             if self.storage_mode is None:
@@ -627,23 +627,23 @@ class DistributedEnsemble():
             elif self.storage_mode != storage_mode:
                 raise MolnsUtilException("Storage mode already set to {0}, can not mix storage modes".format(self.storage_mode))
             # Do we have enough trajectores yet?
-            if number_of_realizations is None and self.number_of_realizations == 0:
-                raise MolnsUtilException("number_of_realizations is zero")
+            if number_of_trajectories is None and self.number_of_trajectories == 0:
+                raise MolnsUtilException("number_of_trajectories is zero")
             # Run simulations
-            if self.number_of_realizations < number_of_realizations:
-                self.add_realizations( number_of_realizations - self.number_of_realizations, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode)
+            if self.number_of_trajectories < number_of_trajectories:
+                self.add_realizations( number_of_trajectories - self.number_of_trajectories, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode)
 
             if chunk_size is None:
-                chunk_size = self._determine_chunk_size(self.number_of_realizations)
+                chunk_size = self._determine_chunk_size(self.number_of_trajectories)
             if verbose:
-                print "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(self.number_of_realizations*len(self.parameters), chunk_size)
+                print "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(self.number_of_trajectories*len(self.parameters), chunk_size)
             else:
                 progress_bar=False
 
             # chunks per parameter
-            num_chunks = int(math.ceil(self.number_of_realizations/float(chunk_size)))
+            num_chunks = int(math.ceil(self.number_of_trajectories/float(chunk_size)))
             chunks = [chunk_size]*(num_chunks-1)
-            chunks.append(self.number_of_realizations-chunk_size*(num_chunks-1))
+            chunks.append(self.number_of_trajectories-chunk_size*(num_chunks-1))
             # total chunks
             pchunks = chunks*len(self.parameters)
             num_pchunks = num_chunks*len(self.parameters)
@@ -660,16 +660,16 @@ class DistributedEnsemble():
         else:
             # If we don't store the realizations (or use the stored ones)
             if chunk_size is None:
-                chunk_size = self._determine_chunk_size(number_of_realizations)
+                chunk_size = self._determine_chunk_size(number_of_trajectories)
             if not verbose:
                 progress_bar=False
             else:
-                print "Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})".format(number_of_realizations,chunk_size)
+                print "Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})".format(number_of_trajectories,chunk_size)
 
             # chunks per parameter
-            num_chunks = int(math.ceil(number_of_realizations/float(chunk_size)))
+            num_chunks = int(math.ceil(number_of_trajectories/float(chunk_size)))
             chunks = [chunk_size]*(num_chunks-1)
-            chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
+            chunks.append(number_of_trajectories-chunk_size*(num_chunks-1))
             # total chunks
             pchunks = chunks*len(self.parameters)
             num_pchunks = num_chunks*len(self.parameters)
@@ -682,8 +682,8 @@ class DistributedEnsemble():
             seed_list = []
             for _ in range(len(self.parameters)):
                 #need to do it this way cause the number of run per chunk might not be even
-                seed_list.extend(range(self.seed_base, self.seed_base+number_of_realizations, chunk_size))
-                self.seed_base += number_of_realizations
+                seed_list.extend(range(self.seed_base, self.seed_base+number_of_trajectories, chunk_size))
+                self.seed_base += number_of_trajectories
             #def run_ensemble_map_and_aggregate(model_class, parameters, seed_base, number_of_trajectories, mapper, aggregator=None):
             results  = self.lv.map_async(run_ensemble_map_and_aggregate, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [mapper]*num_pchunks, [aggregator]*num_pchunks)
 
@@ -729,29 +729,29 @@ class DistributedEnsemble():
 
 
     #--------------------------
-    def add_realizations(self, number_of_realizations=None, chunk_size=None, verbose=True, progress_bar=True, storage_mode="Shared"):
+    def add_realizations(self, number_of_trajectories=None, chunk_size=None, verbose=True, progress_bar=True, storage_mode="Shared"):
         """ Add a number of realizations to the ensemble. """
-        if number_of_realizations is None:
-            raise MolnsUtilException("No number_of_realizations specified")
-        if type(number_of_realizations) is not type(1):
-            raise MolnsUtilException("number_of_realizations must be an integer")
+        if number_of_trajectories is None:
+            raise MolnsUtilException("No number_of_trajectories specified")
+        if type(number_of_trajectories) is not type(1):
+            raise MolnsUtilException("number_of_trajectories must be an integer")
 
         if chunk_size is None:
-            chunk_size = self._determine_chunk_size(number_of_realizations)
+            chunk_size = self._determine_chunk_size(number_of_trajectories)
 
         if not verbose:
             progress_bar=False
         else:
             if len(self.parameters) > 1:
-                print "Generating {0} realizations of the model at {1} parameter points (chunk size={2})".format(number_of_realizations, len(self.parameters), chunk_size)
+                print "Generating {0} realizations of the model at {1} parameter points (chunk size={2})".format(number_of_trajectories, len(self.parameters), chunk_size)
             else:
-                print "Generating {0} realizations of the model (chunk size={1})".format(number_of_realizations,chunk_size)
+                print "Generating {0} realizations of the model (chunk size={1})".format(number_of_trajectories,chunk_size)
 
-        self.number_of_realizations += number_of_realizations
+        self.number_of_trajectories += number_of_trajectories
 
-        num_chunks = int(math.ceil(number_of_realizations/float(chunk_size)))
+        num_chunks = int(math.ceil(number_of_trajectories/float(chunk_size)))
         chunks = [chunk_size]*(num_chunks-1)
-        chunks.append(number_of_realizations-chunk_size*(num_chunks-1))
+        chunks.append(number_of_trajectories-chunk_size*(num_chunks-1))
         # total chunks
         pchunks = chunks*len(self.parameters)
         num_pchunks = num_chunks*len(self.parameters)
@@ -764,8 +764,8 @@ class DistributedEnsemble():
         seed_list = []
         for _ in range(len(self.parameters)):
             #need to do it this way cause the number of run per chunk might not be even
-            seed_list.extend(range(self.seed_base, self.seed_base+number_of_realizations, chunk_size))
-            self.seed_base += number_of_realizations
+            seed_list.extend(range(self.seed_base, self.seed_base+number_of_trajectories, chunk_size))
+            self.seed_base += number_of_trajectories
         results  = self.lv.map_async(run_ensemble, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [storage_mode]*num_pchunks)
 
         if progress_bar:
@@ -795,24 +795,24 @@ class DistributedEnsemble():
 
     #-------- Convenience functions with builtin mappers/reducers  ------------------
 
-    def mean_variance(self, mapper=None, number_of_realizations=None, chunk_size=None, verbose=True, store_realizations=True, storage_mode="Shared", cache_results=False):
-        """ Compute the mean and variance (second order central moment) of the function g(X) based on number_of_realizations realizations
+    def mean_variance(self, mapper=None, number_of_trajectories=None, chunk_size=None, verbose=True, store_realizations=True, storage_mode="Shared", cache_results=False):
+        """ Compute the mean and variance (second order central moment) of the function g(X) based on number_of_trajectories realizations
             in the ensemble. """
-        return self.run(mapper=mapper, aggregator=builtin_aggregator_sum_and_sum2, reducer=builtin_reducer_mean_variance, number_of_realizations=number_of_realizations, chunk_size=chunk_size, verbose=verbose, store_realizations=store_realizations, storage_mode=storage_mode, cache_results=cache_results)
+        return self.run(mapper=mapper, aggregator=builtin_aggregator_sum_and_sum2, reducer=builtin_reducer_mean_variance, number_of_trajectories=number_of_trajectories, chunk_size=chunk_size, verbose=verbose, store_realizations=store_realizations, storage_mode=storage_mode, cache_results=cache_results)
 
-    def mean(self, mapper=None, number_of_realizations=None, chunk_size=None, verbose=True, store_realizations=True, storage_mode="Shared", cache_results=False):
-        """ Compute the mean of the function g(X) based on number_of_realizations realizations
+    def mean(self, mapper=None, number_of_trajectories=None, chunk_size=None, verbose=True, store_realizations=True, storage_mode="Shared", cache_results=False):
+        """ Compute the mean of the function g(X) based on number_of_trajectories realizations
             in the ensemble. It has to make sense to say g(result1)+g(result2). """
-        return self.run(mapper=mapper, aggregator=builtin_aggregator_add, reducer=builtin_reducer_mean, number_of_realizations=number_of_realizations, chunk_size=chunk_size, verbose=verbose, store_realizations=store_realizations, storage_mode=storage_mode, cache_results=cache_results)
+        return self.run(mapper=mapper, aggregator=builtin_aggregator_add, reducer=builtin_reducer_mean, number_of_trajectories=number_of_trajectories, chunk_size=chunk_size, verbose=verbose, store_realizations=store_realizations, storage_mode=storage_mode, cache_results=cache_results)
 
 
-    def moment(self, g=None, order=1, number_of_realizations=None):
-        """ Compute the moment of order 'order' of g(X), using number_of_realizations
+    def moment(self, g=None, order=1, number_of_trajectories=None):
+        """ Compute the moment of order 'order' of g(X), using number_of_trajectories
             realizations in the ensemble. """
         raise Exception('TODO')
 
-    def histogram_density(self, g=None, number_of_realizations=None):
-        """ Estimate the probability density function of g(X) based on number_of_realizations realizations
+    def histogram_density(self, g=None, number_of_trajectories=None):
+        """ Estimate the probability density function of g(X) based on number_of_trajectories realizations
             in the ensemble. """
         raise Exception('TODO')
 
@@ -840,9 +840,9 @@ class DistributedEnsemble():
         # from engine failure.
         self.lv.retries=3
 
-    def _determine_chunk_size(self, number_of_realizations):
+    def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
-        return int(max(1, round(number_of_realizations/float(self.num_engines))))
+        return int(max(1, round(number_of_trajectories/float(self.num_engines))))
 
     def _clear_cache(self):
         """ Remove all cached result objects on the engines. """
@@ -919,12 +919,12 @@ class ParameterSweep(DistributedEnsemble):
         self.num_engines = num_engines
         self._update_client()
 
-    def _determine_chunk_size(self, number_of_realizations):
+    def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
         num_params = len(self.parameters)
         if num_params >= self.num_engines:
-            return number_of_realizations
-        return int(max(1, math.ceil(number_of_realizations*num_params/float(self.num_engines))))
+            return number_of_trajectories
+        return int(max(1, math.ceil(number_of_trajectories*num_params/float(self.num_engines))))
 
     def run_reducer(self, reducer, mapped_results):
         """ Inside the run() function, apply the reducer to all of the map'ped-aggregated result values. """
