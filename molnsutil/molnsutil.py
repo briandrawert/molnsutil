@@ -38,11 +38,14 @@ import math
 import molns_cloudpickle as cloudpickle
 import random
 import copy
+import inspect
 
 import swiftclient.client
 import IPython.parallel
 import uuid
 from IPython.display import HTML, Javascript, display
+import os
+import sys
 
 import itertools
 
@@ -564,19 +567,34 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
 class DistributedEnsemble():
     """ A class to provide an API for execution of a distributed ensemble. """
 
-    def __init__(self, model_class=None, parameters=None, client=None, num_engines=None):
+    my_class_name = 'DistributedEnsemble'
+
+    @classmethod
+    def delete(cls, name):
+        os.remove('.molnsutil/{1}-{0}'.format(name, cls.my_class_name))
+
+    def __init__(self, name=None, model_class=None, parameters=None, client=None, num_engines=None):
         """ Constructor """
-        self.my_class_name = 'DistributedEnsemble'
+        if not isinstance(name, str):
+            raise MolnsUtilException("name not specified")
+        self.name = name
+        if not inspect.isclass(model_class):
+            raise MolnsUtilException("model_class not a class")
         self.model_class = cloudpickle.dumps(model_class)
-        self.parameters = [parameters]
-        self.number_of_trajectories = 0
-        self.seed_base = self.generate_seed_base()
-        self.storage_mode = None
-        # A chunk list
-        self.result_list = {}
         # Set the Ipython.parallel client
-        self.num_engines = num_engines
         self._update_client(client)
+        try:
+            self.load_state()
+        except IOError as e:
+            sys.stderr.write('{0}'.format(e))
+            self.parameters = [parameters]
+            self.number_of_trajectories = 0
+            self.seed_base = self.generate_seed_base()
+            self.storage_mode = None
+            self.result_list = {}
+            self.num_engines = num_engines
+            self.running_MapReduceTask = None
+            self.running_SimulationTask = None
 
     def generate_seed_base(self):
         """ Create a random number and truncate to 64 bits. """
@@ -588,7 +606,7 @@ class DistributedEnsemble():
         return x
 
     #--------------------------
-    def save_state(self, name):
+    def save_state(self):
         """ Serialize the state of the ensemble, for persistence beyond memory."""
         state = {}
         state['model_class'] = self.model_class
@@ -597,14 +615,22 @@ class DistributedEnsemble():
         state['seed_base'] = self.seed_base
         state['result_list'] = self.result_list
         state['storage_mode'] = self.storage_mode
+        if self.running_MapReduceTask is None:
+            state['running_MapReduceTask'] = None
+        else:
+            state['running_MapReduceTask'] = self.running_MapReduceTask.msg_ids
+        if self.running_SimulationTask is None:
+            state['running_SimulationTask'] = None
+        else:
+            state['running_SimulationTask'] = self.running_SimulationTask.msg_ids
         if not os.path.isdir('.molnsutil'):
             os.makedirs('.molnsutil')
-        with open('.molnsutil/{1}-{0}'.format(name, self.my_class_name)) as fd:
+        with open('.molnsutil/{1}-{0}'.format(self.name, self.my_class_name)) as fd:
             pickle.dump(state, fd)
 
-    def load_state(self, name):
+    def load_state(self):
         """ Recover the state of an ensemble from a previous save. """
-        with open('.molnsutil/{1}-{0}'.format(name, self.my_class_name)) as fd:
+        with open('.molnsutil/{1}-{0}'.format(self.name, self.my_class_name)) as fd:
             state = pickle.load(fd)
         if state['model_class'] is not self.model_class:
             raise MolnsUtilException("Can only load state of a class that is identical to the original class")
@@ -613,33 +639,44 @@ class DistributedEnsemble():
         self.seed_base = state['seed_base']
         self.result_list = state['result_list']
         self.storage_mode = state['storage_mode']
+        if state['running_MapReduceTask'] is None:
+            self.running_MapReduceTask = None
+        else:
+            self.running_MapReduceTask = self.c.get_result(state['running_MapReduceTask'])
+        if state['running_SimulationTask'] is None:
+            self.running_SimulationTask = None
+        else:
+            self.running_SimulationTask = self.c.get_result(state['running_SimulationTask'])
 
     #--------------------------
     # MAIN FUNCTION
     #--------------------------
-    def run(self, mapper, aggregator=None, reducer=None, number_of_trajectories=None, chunk_size=None, verbose=True, progress_bar=True, store_realizations=True, storage_mode="Shared", cache_results=False):
+    def run(self, mapper=None, aggregator=None, reducer=None, number_of_trajectories=None, chunk_size=None, verbose=True, progress_bar=True, store_realizations=True, storage_mode="Shared", cache_results=False):
         """ Main entry point """
-        if store_realizations:
-            if self.storage_mode is None:
-                if storage_mode != "Persistent" and storage_mode != "Shared":
-                    raise MolnsUtilException("Acceptable values for 'storage_mode' are 'Persistent' or 'Shared'")
-                self.storage_mode = storage_mode
-            elif self.storage_mode != storage_mode:
-                raise MolnsUtilException("Storage mode already set to {0}, can not mix storage modes".format(self.storage_mode))
-            # Do we have enough trajectores yet?
-            if number_of_trajectories is None and self.number_of_trajectories == 0:
-                raise MolnsUtilException("number_of_trajectories is zero")
-            # Run simulations
-            if self.number_of_trajectories < number_of_trajectories:
-                self.add_realizations( number_of_trajectories - self.number_of_trajectories, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode)
+        if mapper is None or not hasattr(mapper, '__call__'):
+            raise MolnsUtilException("mapper function not specified")
+#        if store_realizations:
+        if self.storage_mode is None:
+            if storage_mode != "Persistent" and storage_mode != "Shared":
+                raise MolnsUtilException("Acceptable values for 'storage_mode' are 'Persistent' or 'Shared'")
+            self.storage_mode = storage_mode
+        elif self.storage_mode != storage_mode:
+            raise MolnsUtilException("Storage mode already set to {0}, can not mix storage modes".format(self.storage_mode))
+        # Do we have enough trajectores yet?
+        if number_of_trajectories is None and self.number_of_trajectories == 0:
+            raise MolnsUtilException("number_of_trajectories is zero")
+        # Run simulations
+        if self.number_of_trajectories < number_of_trajectories:
+            self.add_realizations( number_of_trajectories - self.number_of_trajectories, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode)
 
-            if chunk_size is None:
-                chunk_size = self._determine_chunk_size(self.number_of_trajectories)
-            if verbose:
-                print "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(self.number_of_trajectories*len(self.parameters), chunk_size)
-            else:
-                progress_bar=False
+        if chunk_size is None:
+            chunk_size = self._determine_chunk_size(self.number_of_trajectories)
+        if verbose:
+            print "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(self.number_of_trajectories*len(self.parameters), chunk_size)
+        else:
+            progress_bar=False
 
+        if self.running_MapReduceTask is None:
             # chunks per parameter
             num_chunks = int(math.ceil(self.number_of_trajectories/float(chunk_size)))
             chunks = [chunk_size]*(num_chunks-1)
@@ -656,40 +693,11 @@ class DistributedEnsemble():
                 for i in range(num_chunks):
                     presult_list.append( self.result_list[id][i*chunk_size:(i+1)*chunk_size] )
 
-            results = self.lv.map_async(map_and_aggregate, presult_list, param_set_ids, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
-        else:
-            # If we don't store the realizations (or use the stored ones)
-            if chunk_size is None:
-                chunk_size = self._determine_chunk_size(number_of_trajectories)
-            if not verbose:
-                progress_bar=False
-            else:
-                print "Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})".format(number_of_trajectories,chunk_size)
-
-            # chunks per parameter
-            num_chunks = int(math.ceil(number_of_trajectories/float(chunk_size)))
-            chunks = [chunk_size]*(num_chunks-1)
-            chunks.append(number_of_trajectories-chunk_size*(num_chunks-1))
-            # total chunks
-            pchunks = chunks*len(self.parameters)
-            num_pchunks = num_chunks*len(self.parameters)
-            pparams = []
-            param_set_ids = []
-            for id, param in enumerate(self.parameters):
-                param_set_ids.extend( [id]*num_chunks )
-                pparams.extend( [param]*num_chunks )
-
-            seed_list = []
-            for _ in range(len(self.parameters)):
-                #need to do it this way cause the number of run per chunk might not be even
-                seed_list.extend(range(self.seed_base, self.seed_base+number_of_trajectories, chunk_size))
-                self.seed_base += number_of_trajectories
-            #def run_ensemble_map_and_aggregate(model_class, parameters, seed_base, number_of_trajectories, mapper, aggregator=None):
-            results  = self.lv.map_async(run_ensemble_map_and_aggregate, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [mapper]*num_pchunks, [aggregator]*num_pchunks)
+            self.running_MapReduceTask = self.lv.map_async(map_and_aggregate, presult_list, param_set_ids, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
+            self.save_state()
 
 
         if progress_bar:
-            # This should be factored out somehow.
             divid = str(uuid.uuid4())
             pb = HTML("""
                           <div style="border: 1px solid black; width:500px">
@@ -697,10 +705,15 @@ class DistributedEnsemble():
                           </div>
                           """.format(divid))
             display(pb)
-
+            
+            while not self.running_MapReduceTask.ready():
+                self.running_MapReduceTask.wait(timeout=1)
+                progress = 100.0 * self.running_MapReduceTask.progress / len(self.running_MapReduceTask)
+                display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(+1)/len(self.running_MapReduceTask))))
+        
         # We process the results as they arrive.
         mapped_results = {}
-        for i,rset in enumerate(results):
+        for i,rset in enumerate(self.running_MapReduceTask.result):
             param_set_id = rset['param_set_id']
             r = rset['result']
             if param_set_id not in mapped_results:
@@ -709,16 +722,22 @@ class DistributedEnsemble():
                 mapped_results[param_set_id].extend(r) #if a list is returned, extend that list
             else:
                 mapped_results[param_set_id].append(r)
-            if progress_bar:
-                display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(i+1)/len(results))))
+
+        # Set the state to not running
+        self.running_MapReduceTask = None
+        self.save_state()
 
         if verbose:
             print "Running reducer on mapped and aggregated results (size={0})".format(len(mapped_results[0]))
         if reducer is None:
             reducer = builtin_reducer_default
+        # Delete
+        if not store_realizations:
+            self.delete_realizations()
+            self.save_state()
+
         # Run reducer
         return self.run_reducer(reducer, mapped_results)
-
 
 
     def run_reducer(self, reducer, mapped_results):
@@ -746,30 +765,31 @@ class DistributedEnsemble():
                 print "Generating {0} realizations of the model at {1} parameter points (chunk size={2})".format(number_of_trajectories, len(self.parameters), chunk_size)
             else:
                 print "Generating {0} realizations of the model (chunk size={1})".format(number_of_trajectories,chunk_size)
+        if self.running_SimulationTask is None:
 
-        self.number_of_trajectories += number_of_trajectories
+            self.number_of_trajectories += number_of_trajectories
 
-        num_chunks = int(math.ceil(number_of_trajectories/float(chunk_size)))
-        chunks = [chunk_size]*(num_chunks-1)
-        chunks.append(number_of_trajectories-chunk_size*(num_chunks-1))
-        # total chunks
-        pchunks = chunks*len(self.parameters)
-        num_pchunks = num_chunks*len(self.parameters)
-        pparams = []
-        param_set_ids = []
-        for id, param in enumerate(self.parameters):
-            param_set_ids.extend( [id]*num_chunks )
-            pparams.extend( [param]*num_chunks )
+            num_chunks = int(math.ceil(number_of_trajectories/float(chunk_size)))
+            chunks = [chunk_size]*(num_chunks-1)
+            chunks.append(number_of_trajectories-chunk_size*(num_chunks-1))
+            # total chunks
+            pchunks = chunks*len(self.parameters)
+            num_pchunks = num_chunks*len(self.parameters)
+            pparams = []
+            param_set_ids = []
+            for id, param in enumerate(self.parameters):
+                param_set_ids.extend( [id]*num_chunks )
+                pparams.extend( [param]*num_chunks )
 
-        seed_list = []
-        for _ in range(len(self.parameters)):
-            #need to do it this way cause the number of run per chunk might not be even
-            seed_list.extend(range(self.seed_base, self.seed_base+number_of_trajectories, chunk_size))
-            self.seed_base += number_of_trajectories
-        results  = self.lv.map_async(run_ensemble, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [storage_mode]*num_pchunks)
+            seed_list = []
+            for _ in range(len(self.parameters)):
+                #need to do it this way cause the number of run per chunk might not be even
+                seed_list.extend(range(self.seed_base, self.seed_base+number_of_trajectories, chunk_size))
+                self.seed_base += number_of_trajectories
+            self.running_SimulationTask  = self.lv.map_async(run_ensemble, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [storage_mode]*num_pchunks)
+            self.save_state()
 
         if progress_bar:
-            # This should be factored out somehow.
             divid = str(uuid.uuid4())
             pb = HTML("""
                           <div style="border: 1px solid black; width:500px">
@@ -777,16 +797,22 @@ class DistributedEnsemble():
                           </div>
                           """.format(divid))
             display(pb)
+            
+            while not self.running_SimulationTask.ready():
+                self.running_SimulationTask.wait(timeout=1)
+                progress = 100.0 * self.running_SimulationTask.progress / len(self.running_SimulationTask)
+                display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(+1)/len(self.running_SimulationTask))))
 
         # We process the results as they arrive.
-        for i,ret in enumerate(results):
+        for i,ret in enumerate(self.running_SimulationTask.result):
             r = ret['filenames']
             param_set_id = ret['param_set_id']
             if param_set_id not in self.result_list:
                 self.result_list[param_set_id] = []
             self.result_list[param_set_id].extend(r)
-            if progress_bar:
-                display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(i+1)/len(results))))
+            
+        self.running_SimulationTask = None
+        self.save_state()
 
 
         return {'wall_time':results.wall_time,'serial_time':results.serial_time}
@@ -875,6 +901,8 @@ class DistributedEnsemble():
 
 class ParameterSweep(DistributedEnsemble):
     """ Making parameter sweeps on distributed compute systems easier. """
+    
+    my_class_name = 'ParameterSweep'
 
     def __init__(self, model_class, parameters, client=None, num_engines=None):
         """ Constructor.
@@ -889,7 +917,6 @@ class ParameterSweep(DistributedEnsemble):
 
         DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines)
 
-        self.my_class_name = 'ParameterSweep'
         self.parameters = []
         
         # process the parameters
