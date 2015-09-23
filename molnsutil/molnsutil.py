@@ -582,6 +582,7 @@ class DistributedEnsemble():
             raise MolnsUtilException("model_class not a class")
         self.model_class = cloudpickle.dumps(model_class)
         # Set the Ipython.parallel client
+        self.num_engines = num_engines
         self._update_client(client)
         try:
             self.load_state()
@@ -592,7 +593,6 @@ class DistributedEnsemble():
             self.seed_base = self.generate_seed_base()
             self.storage_mode = None
             self.result_list = {}
-            self.num_engines = num_engines
             self.running_MapReduceTask = None
             self.running_SimulationTask = None
 
@@ -923,6 +923,7 @@ class ParameterSweep(DistributedEnsemble):
             raise MolnsUtilException("model_class not a class")
         self.model_class = cloudpickle.dumps(model_class)
         # Set the Ipython.parallel client
+        self.num_engines = num_engines
         self._update_client(client)
         try:
             self.load_state()
@@ -932,7 +933,6 @@ class ParameterSweep(DistributedEnsemble):
             self.seed_base = self.generate_seed_base()
             self.storage_mode = None
             self.result_list = {}
-            self.num_engines = num_engines
             self.running_MapReduceTask = None
             self.running_SimulationTask = None
 
