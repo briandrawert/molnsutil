@@ -587,7 +587,7 @@ class DistributedEnsemble():
         try:
             self.load_state()
         except IOError as e:
-            sys.stderr.write('{0}'.format(e))
+            sys.stderr.write('{0}'.format(e)) #DEBUGING
             self.parameters = [parameters]
             self.number_of_trajectories = 0
             self.seed_base = self.generate_seed_base()
@@ -625,7 +625,7 @@ class DistributedEnsemble():
             state['running_SimulationTask'] = self.running_SimulationTask.msg_ids
         if not os.path.isdir('.molnsutil'):
             os.makedirs('.molnsutil')
-        with open('.molnsutil/{1}-{0}'.format(self.name, self.my_class_name)) as fd:
+        with open('.molnsutil/{1}-{0}'.format(self.name, self.my_class_name),'w+') as fd:
             pickle.dump(state, fd)
 
     def load_state(self):
@@ -710,6 +710,7 @@ class DistributedEnsemble():
                 self.running_MapReduceTask.wait(timeout=1)
                 progress = 100.0 * self.running_MapReduceTask.progress / len(self.running_MapReduceTask)
                 display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(+1)/len(self.running_MapReduceTask))))
+            display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0)))
         
         # We process the results as they arrive.
         mapped_results = {}
@@ -802,6 +803,7 @@ class DistributedEnsemble():
                 self.running_SimulationTask.wait(timeout=1)
                 progress = 100.0 * self.running_SimulationTask.progress / len(self.running_SimulationTask)
                 display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(+1)/len(self.running_SimulationTask))))
+            display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0)))
 
         # We process the results as they arrive.
         for i,ret in enumerate(self.running_SimulationTask.result):
@@ -811,11 +813,13 @@ class DistributedEnsemble():
                 self.result_list[param_set_id] = []
             self.result_list[param_set_id].extend(r)
             
+        wall_time = self.running_SimulationTask.wall_time
+        serial_time = self.running_SimulationTask.serial_time
         self.running_SimulationTask = None
         self.save_state()
 
 
-        return {'wall_time':results.wall_time,'serial_time':results.serial_time}
+        return {'wall_time':wall_time,'serial_time':serial_time}
 
 
 
