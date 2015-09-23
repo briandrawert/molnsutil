@@ -904,7 +904,7 @@ class ParameterSweep(DistributedEnsemble):
     
     my_class_name = 'ParameterSweep'
 
-    def __init__(self, model_class, parameters, client=None, num_engines=None):
+    def __init__(self, name=None, model_class=None, parameters=None, client=None, num_engines=None):
         """ Constructor.
         Args:
           model_class: a class object of the model for simulation, must be a sub-class of URDMEModel
@@ -914,37 +914,53 @@ class ParameterSweep(DistributedEnsemble):
               e.g.: {'arg1':[1,2,3],'arg2':[1,2,3]}  will produce 9 parameter points.
             If it is a list, where each element of the list is a dict
             """
+        self.parameters = None
 
-        DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines)
-
-        self.parameters = []
-        
-        # process the parameters
-        if type(parameters) is type({}):
-            vals = []
-            keys = []
-            for key, value in parameters.items():
-                 keys.append(key)
-                 vals.append(value)
-            pspace=itertools.product(*vals)
-
-            paramsets = []
-
-            for p in pspace:
-                pset = {}
-                for i,val in enumerate(p):
-                    pset[keys[i]] = val
-                paramsets.append(pset)
-
-            self.parameters = paramsets
-        elif type(parameters) is type([]):
-            self.parameters = parameters
-        else:
-            raise MolnsUtilException("parameters must be a dict.")
-
+        if not isinstance(name, str):
+            raise MolnsUtilException("name not specified")
+        self.name = name
+        if not inspect.isclass(model_class):
+            raise MolnsUtilException("model_class not a class")
+        self.model_class = cloudpickle.dumps(model_class)
         # Set the Ipython.parallel client
-        self.num_engines = num_engines
-        self._update_client()
+        self._update_client(client)
+        try:
+            self.load_state()
+        except IOError as e:
+            sys.stderr.write('load_state() raised: {0}'.format(e))
+            self.number_of_trajectories = 0
+            self.seed_base = self.generate_seed_base()
+            self.storage_mode = None
+            self.result_list = {}
+            self.num_engines = num_engines
+            self.running_MapReduceTask = None
+            self.running_SimulationTask = None
+
+
+        if self.parameters is None:
+            # process the parameters
+            if type(parameters) is type({}):
+                vals = []
+                keys = []
+                for key, value in parameters.items():
+                     keys.append(key)
+                     vals.append(value)
+                pspace=itertools.product(*vals)
+
+                paramsets = []
+
+                for p in pspace:
+                    pset = {}
+                    for i,val in enumerate(p):
+                        pset[keys[i]] = val
+                    paramsets.append(pset)
+
+                self.parameters = paramsets
+            elif type(parameters) is type([]):
+                self.parameters = parameters
+            else:
+                raise MolnsUtilException("parameters must be a dict.")
+
 
     def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
