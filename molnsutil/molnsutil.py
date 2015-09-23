@@ -636,6 +636,7 @@ class DistributedEnsemble():
             #sys.stderr.write("Error loading saved state\n\n")
             #sys.stderr.write("state['model_class']={0}\n\n".format(state['model_class']))
             #sys.stderr.write("self.model_class={0}\n\n".format(self.model_class))
+            #sys.stderr.write("state['model_class'] != self.model_class {0}\n\n".format(state['model_class'] != self.model_class))
             raise MolnsUtilException("Can only load state of a class that is identical to the original class")
         self.parameters = state['parameters']
         self.number_of_trajectories = state['number_of_trajectories']
@@ -769,9 +770,6 @@ class DistributedEnsemble():
             else:
                 print "Generating {0} realizations of the model (chunk size={1})".format(number_of_trajectories,chunk_size)
         if self.running_SimulationTask is None:
-
-            self.number_of_trajectories += number_of_trajectories
-
             num_chunks = int(math.ceil(number_of_trajectories/float(chunk_size)))
             chunks = [chunk_size]*(num_chunks-1)
             chunks.append(number_of_trajectories-chunk_size*(num_chunks-1))
@@ -817,6 +815,7 @@ class DistributedEnsemble():
             
         wall_time = self.running_SimulationTask.wall_time
         serial_time = self.running_SimulationTask.serial_time
+        self.number_of_trajectories += number_of_trajectories
         self.running_SimulationTask = None
         self.save_state()
 
@@ -896,7 +895,7 @@ class DistributedEnsemble():
                     ss.delete(filename)
                 except OSError as e:
                     pass
-        self.result_list = []
+        self.result_list = {}
         self.number_of_trajectories = 0
 
     def __del__(self):
