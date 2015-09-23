@@ -632,7 +632,10 @@ class DistributedEnsemble():
         """ Recover the state of an ensemble from a previous save. """
         with open('.molnsutil/{1}-{0}'.format(self.name, self.my_class_name)) as fd:
             state = pickle.load(fd)
-        if state['model_class'] is not self.model_class:
+        if state['model_class'] != self.model_class:
+            #sys.stderr.write("Error loading saved state\n\n")
+            #sys.stderr.write("state['model_class']={0}\n\n".format(state['model_class']))
+            #sys.stderr.write("self.model_class={0}\n\n".format(self.model_class))
             raise MolnsUtilException("Can only load state of a class that is identical to the original class")
         self.parameters = state['parameters']
         self.number_of_trajectories = state['number_of_trajectories']
@@ -655,7 +658,6 @@ class DistributedEnsemble():
         """ Main entry point """
         if mapper is None or not hasattr(mapper, '__call__'):
             raise MolnsUtilException("mapper function not specified")
-#        if store_realizations:
         if self.storage_mode is None:
             if storage_mode != "Persistent" and storage_mode != "Shared":
                 raise MolnsUtilException("Acceptable values for 'storage_mode' are 'Persistent' or 'Shared'")
@@ -711,7 +713,7 @@ class DistributedEnsemble():
                 progress = 100.0 * self.running_MapReduceTask.progress / len(self.running_MapReduceTask)
                 display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(+1)/len(self.running_MapReduceTask))))
             display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0)))
-        
+    
         # We process the results as they arrive.
         mapped_results = {}
         for i,rset in enumerate(self.running_MapReduceTask.result):
@@ -894,13 +896,12 @@ class DistributedEnsemble():
                     ss.delete(filename)
                 except OSError as e:
                     pass
+        self.result_list = []
+        self.number_of_trajectories = 0
 
     def __del__(self):
         """ Deconstructor. """
-        try:
-            self.delete_realizations()
-        except Exception as e:
-            pass
+        pass
 
 
 class ParameterSweep(DistributedEnsemble):
