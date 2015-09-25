@@ -72,6 +72,7 @@ import multiprocessing
 
 import os
 def get_s3config():
+    """ Return the configuration for the persistent storage. """
     try:
         with open(os.environ['HOME']+'/.molns/s3.json','r') as fh:
             s3config = json.loads(fh.read())
@@ -573,6 +574,7 @@ class DistributedEnsemble():
     #-----------------------------------------------------------------------------------
     @classmethod
     def delete(cls, name):
+        """ Static method to remove the state of a distributed comptutation from the system."""
         # delete realization
         try:
             with open('.molnsutil/{1}-{0}'.format(name, cls.my_class_name)) as fd:
@@ -713,7 +715,26 @@ class DistributedEnsemble():
     # MAIN FUNCTION
     #-----------------------------------------------------------------------------------
     def run(self, mapper=None, aggregator=None, reducer=None, number_of_trajectories=None, chunk_size=None, verbose=True, progress_bar=True, store_realizations=True, storage_mode="Shared", cache_results=False):
-        """ Main entry point """
+        """ Main entry point for executing parallel MOLNs computations.
+        
+        Arguments:
+            mapper                      [required] Python function that takes as input the simulation result. This function is applied to each simulation trajectory.
+            aggregator                  [optional] Python function that aggregates the output of the mapper function on each worker engine.
+            reducer                     [optional] Python function that takes as input the output of all the aggregator functions on each worker.  One insteance of this function is run for each parameter point.
+            number_of_trajectories      [required] Integer, number of simulation trajectories to execute for each parameter point.
+            chunk_size                  [optional] Integer, group a number of trajectories into a block for efficicnet execution. One aggregator will be run for each chunk.
+            verbose                     [optional, default True] Print the status of the computation.
+            progress_bar                [optional, default True] Display a javascript progress bar to indicate the progress of the computation.
+            store_realizations          [optional, default True] If set to False, the intermediary results will be deleted as soon as the computation is complete.
+            storage_mode                [required, default 'Shared'] Either 'Shared' or 'Persistent'. Store the intermediary results in the ephemeral shared filesystem ('Shared'), or the cloud object store ('Persistent' e.g. Amazon S3 or OpenStack Swift).
+            cache_results               [optional, experimental, default False] Store the intermediary results in the ephemeral storage on each compute node.
+        Returns:
+            The output of the computation is returned.  For 'DistributedEnsemble' class, this is the output of the 'reducer' function.  For the 'ParameterSweep' class, this is a 'ParameterSweepResultList' object.
+        Raises:
+            MolnsUtilException on error.
+        """
+        #####
+        # 0. Validate input.
         if mapper is None or not hasattr(mapper, '__call__'):
             raise MolnsUtilException("mapper function not specified")
         if self.storage_mode is None:
@@ -722,24 +743,8 @@ class DistributedEnsemble():
             self.storage_mode = storage_mode
         elif self.storage_mode != storage_mode:
             raise MolnsUtilException("Storage mode already set to {0}, can not mix storage modes".format(self.storage_mode))
-        if number_of_trajectories is None and self.number_of_trajectories == 0:
-            raise MolnsUtilException("number_of_trajectories is zero")
-
-
-        ######
-        # 1. Run simulations
-        if self.number_of_trajectories < number_of_trajectories or (not store_realizations and not self.step1_complete):
-            if verbose:
-                print "Step 1: Computing simulation trajectories."
-            self.add_realizations( number_of_trajectories - self.number_of_trajectories, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode, progress_bar=progress_bar)
-
-            self.step1_complete=True
-        else:
-            if verbose:
-                print "Step 1: Done. Using previously computed simulation trajectories."
-
-        ######
-        # 2. Run Map function for the MapReduce post-processing
+        if number_of_trajectories is None or self.number_of_trajectories == 0:
+            raise MolnsUtilException("'number_of_trajectories' is zero.")
         # Check if the mapper, aggregator, and reducer functions are the same as previously run.  If not throw error.  Use 'clear_results()' to reset
         mapper_fn_pkl = molns_cloudpickle.dumps(mapper)
         if self.mapper_fn is not None and self.mapper_fn != mapper_fn_pkl:
@@ -756,7 +761,24 @@ class DistributedEnsemble():
             raise MolnsUtilException("'reducer' function has changed since results have been computed.  Use 'clear_results()' to reset.")
         else:
             self.reducer_fn = reducer_fn_pkl
+        if self.number_of_trajectories > 0 and not store_realizations and self.number_of_trajectories != number_of_trajectories:
+            raise MolnsUtilException("'number_of_trajectories' is not the same as the original call. It can only be changed if 'store_realizations' is True.")
+        
+
         ######
+        # 1. Run simulations
+        if self.number_of_trajectories < number_of_trajectories or (not store_realizations and not self.step1_complete):
+            if verbose:
+                print "Step 1: Computing simulation trajectories."
+            self.add_realizations( number_of_trajectories - self.number_of_trajectories, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode, progress_bar=progress_bar)
+
+            self.step1_complete=True
+        else:
+            if verbose:
+                print "Step 1: Done. Using previously computed simulation trajectories."
+
+        ######
+        # 2. Run Map function for the MapReduce post-processing
         if self.number_of_results < self.number_of_trajectories or (not store_realizations and not self.step2_complete):
             if verbose:
                 print "Step 2: Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(self.number_of_trajectories*len(self.parameters), chunk_size)
@@ -767,15 +789,13 @@ class DistributedEnsemble():
             if verbose:
                 print "Step 2: Done. Using previously computed results."
 
-
-
         ######
         # 3. Run Reduce function for the MapReduce post-processing
-        if reducer is None:
-            reducer = builtin_reducer_default
         if not self.step3_complete:
             if verbose:
                 print "Step 3: Running reducer on mapped and aggregated results (size={0})".format(len(self.mapped_results[0]))
+            if reducer is None:
+                reducer = builtin_reducer_default
             self.reduced_results = self.run_reducer(reducer)
             self.step3_complete = True
             self.save_state()
@@ -783,45 +803,48 @@ class DistributedEnsemble():
             if verbose:
                 print "Step 3: Done. Using previously computed results."
 
-        # clean up
+        ######
+        # Clean up
         if not store_realizations:
             self.delete_realizations()
             self.delete_results()
             self.save_state()
 
-        # return results
+        ######
+        # Return results
         return self.reduced_results
-
 
     #-----------------------------------------------------------------------------------
     def run_reducer(self, reducer):
         """ Inside the run() function, apply the reducer to all of the map'ped-aggregated result values. """
         return reducer(self.mapped_results[0], parameters=self.parameters[0])
 
-
     #-----------------------------------------------------------------------------------
     def run_mappers(self, mapper, aggregator, chunk_size=None, progress_bar=True):
-        #TODO: If number_of_trajectories > 0 and number_of_results < number_of_trajectories, only run mappers on the 'new' trajectories.
+        """ Run the mapper and aggrregator function on each of the simulation trajectories. """
         if self.running_MapReduceTask is None:
             sys.stderr.write('run_mappers(): Starting MapReduce Task\n')
+            # If number_of_trajectories > 0 and number_of_results < number_of_trajectories, only run mappers on the 'new' trajectories.
+            num_results_to_compute = self.number_of_trajectories - self.number_of_results
+            offset = self.number_of_results
             # chunks per parameter
             if chunk_size is None:
-                chunk_size = self._determine_chunk_size(self.number_of_trajectories)
-            num_chunks = int(math.ceil(self.number_of_trajectories/float(chunk_size)))
+                chunk_size = self._determine_chunk_size(num_results_to_compute)
+            num_chunks = int(math.ceil(num_results_to_compute/float(chunk_size)))
             chunks = [chunk_size]*(num_chunks-1)
-            chunks.append(self.number_of_trajectories-chunk_size*(num_chunks-1))
+            chunks.append(num_results_to_compute-chunk_size*(num_chunks-1))
             # total chunks
             pchunks = chunks*len(self.parameters)
             num_pchunks = num_chunks*len(self.parameters)
-            pparams = []
+            #pparams = []
             param_set_ids = []
             presult_list = []
             try:  #'try' is for Debugging
                 for id, param in enumerate(self.parameters):
                     param_set_ids.extend( [id]*num_chunks )
-                    pparams.extend( [param]*num_chunks )
+                    #pparams.extend( [param]*num_chunks )
                     for i in range(num_chunks):
-                        presult_list.append( self.result_list[id][i*chunk_size:(i+1)*chunk_size] )
+                        presult_list.append( self.result_list[id][(i*chunk_size+offset):((i+1)*chunk_size+offset)] )
             except Exception as e:
                 sys.stderr.write('run_mappers(): caught exception while trying start MapReduce Task: {0}\n'.format(e))
                 sys.stderr.write('run_mappers(): self.parameters={0}\n'.format(self.parameters))
@@ -831,7 +854,7 @@ class DistributedEnsemble():
             self.running_MapReduceTask = self.lv.map_async(map_and_aggregate, presult_list, param_set_ids, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
             self.save_state()
         else:
-            sys.stderr.write('run(): MapReduce Task already running\n')
+            sys.stderr.write('run_mappers(): MapReduce Task already running\n')
 
 
         if progress_bar:
@@ -843,19 +866,19 @@ class DistributedEnsemble():
                           """.format(divid))
             display(pb)
             
-            sys.stderr.write("run(): running_MapReduceTask.ready()={0}\n".format(self.running_MapReduceTask.ready()))
+            sys.stderr.write('run_mappers(): running_MapReduceTask.ready()={0}\n'.format(self.running_MapReduceTask.ready()))
             while not self.running_MapReduceTask.ready():
                 self.running_MapReduceTask.wait(timeout=1)
                 progress = 100.0 * self.running_MapReduceTask.progress / len(self.running_MapReduceTask)
                 display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(+1)/len(self.running_MapReduceTask))))
             display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0)))
-            sys.stderr.write("run(): running_MapReduceTask.ready()={0}\n".format(self.running_MapReduceTask.ready()))
+            sys.stderr.write('run_mappers(): running_MapReduceTask.ready()={0}\n'.format(self.running_MapReduceTask.ready()))
         else:
             sys.stderr.write('run_mappers(): waiting for MapReduce Task to complete (no progress bar)\n')
             self.running_MapReduceTask.wait()
 
     
-        # We process the results as they arrive.
+        # Process the results.
         cnt=0
         self.mapped_results = {}
         for i,rset in enumerate(self.running_MapReduceTask.result):
@@ -995,6 +1018,7 @@ class DistributedEnsemble():
     #-----------------------------------------------------------------------------------
 
     def _update_client(self, client=None):
+        """ Setup the IPython.parallel.Client() object. """
         if client is None:
             self.c = IPython.parallel.Client()
         else:
@@ -1154,7 +1178,10 @@ class ParameterSweep(DistributedEnsemble):
 
 
 class ParameterSweepResult():
-    """TODO"""
+    """ Result object to encapsulate the results of a parameter sweep at a particular parameter point along with the parameters used to compute it.  
+    
+    The object has two member variables, 'result' which contains the MapReduce output and 'parameters' which is a dict containing the parameters used to compute the simulation trajectories.
+    """
     def __init__(self, result, parameters):
         self.result = result
         self.parameters = parameters
@@ -1163,6 +1190,7 @@ class ParameterSweepResult():
         return "{0} => {1}".format(self.parameters, self.result)
 
 class ParameterSweepResultList(list):
+    """ List encapsulating the ParameterSweepResult objects. """
     def __str__(self):
         l = []
         for i in self:
