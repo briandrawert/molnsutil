@@ -679,10 +679,10 @@ class DistributedEnsemble():
         with open('.molnsutil/{1}-{0}'.format(self.name, self.my_class_name)) as fd:
             state = pickle.load(fd)
         if state['model_class'] != self.model_class:
-            #sys.stderr.write("Error loading saved state\n\n")
-            #sys.stderr.write("state['model_class']={0}\n\n".format(state['model_class']))
-            #sys.stderr.write("self.model_class={0}\n\n".format(self.model_class))
-            #sys.stderr.write("state['model_class'] != self.model_class {0}\n\n".format(state['model_class'] != self.model_class))
+            sys.stderr.write("Error loading saved state\n\n")
+            sys.stderr.write("state['model_class']={0}\n\n".format(state['model_class']))
+            sys.stderr.write("self.model_class={0}\n\n".format(self.model_class))
+            sys.stderr.write("state['model_class'] != self.model_class {0}\n\n".format(state['model_class'] != self.model_class))
             raise MolnsUtilException("Can only load state of a class that is identical to the original class. Use '{0}.delete(name=\"{1}\")' to remove previous state.".format(self.my_class_name, self.name))
             #TODO: Check to be sure the state is sane.  Both tasks can not be running, result list and number_of_trajectories should match up, (others?).
         
@@ -743,21 +743,21 @@ class DistributedEnsemble():
             self.storage_mode = storage_mode
         elif self.storage_mode != storage_mode:
             raise MolnsUtilException("Storage mode already set to {0}, can not mix storage modes".format(self.storage_mode))
-        if number_of_trajectories is None or self.number_of_trajectories == 0:
+        if number_of_trajectories is None or number_of_trajectories == 0:
             raise MolnsUtilException("'number_of_trajectories' is zero.")
         # Check if the mapper, aggregator, and reducer functions are the same as previously run.  If not throw error.  Use 'clear_results()' to reset
-        mapper_fn_pkl = molns_cloudpickle.dumps(mapper)
+        mapper_fn_pkl = cloudpickle.dumps(mapper)
         if self.mapper_fn is not None and self.mapper_fn != mapper_fn_pkl:
             raise MolnsUtilException("'mapper' function has changed since results have been computed.  Use 'clear_results()' to reset.")
         else:
             self.mapper_fn = mapper_fn_pkl
-        aggregator_fn_pkl = molns_cloudpickle.dumps(aggregator)
+        aggregator_fn_pkl = cloudpickle.dumps(aggregator)
         if self.aggregator_fn is not None and self.aggregator_fn != aggregator_fn_pkl:
             raise MolnsUtilException("'aggregator' function has changed since results have been computed.  Use 'clear_results()' to reset.")
         else:
             self.aggregator_fn = aggregator_fn_pkl
-        reducer_fn_pkl = molns_cloudpickle.dumps(reducer)
-        if self.reducer_fn is not None and self.reducer_fn != reducerr_fn_pkl:
+        reducer_fn_pkl = cloudpickle.dumps(reducer)
+        if self.reducer_fn is not None and self.reducer_fn != reducer_fn_pkl:
             raise MolnsUtilException("'reducer' function has changed since results have been computed.  Use 'clear_results()' to reset.")
         else:
             self.reducer_fn = reducer_fn_pkl
@@ -767,7 +767,9 @@ class DistributedEnsemble():
 
         ######
         # 1. Run simulations
-        if self.number_of_trajectories < number_of_trajectories or (not store_realizations and not self.step1_complete):
+        sys.stderr.write("[1] self.number_of_trajectories < number_of_trajectories: {0} {1} {2}\n".format(self.number_of_trajectories,number_of_trajectories,self.number_of_trajectories < number_of_trajectories))
+        sys.stderr.write("[1] (not self.step1_complete): {0} {1} {2}\n".format(store_realizations, self.step1_complete, (not store_realizations and not self.step1_complete)))
+        if self.number_of_trajectories < number_of_trajectories or (not self.step1_complete):
             if verbose:
                 print "Step 1: Computing simulation trajectories."
             self.add_realizations( number_of_trajectories - self.number_of_trajectories, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode, progress_bar=progress_bar)
@@ -779,10 +781,10 @@ class DistributedEnsemble():
 
         ######
         # 2. Run Map function for the MapReduce post-processing
-        if self.number_of_results < self.number_of_trajectories or (not store_realizations and not self.step2_complete):
+        if self.number_of_results < self.number_of_trajectories or (not self.step2_complete):
             if verbose:
                 print "Step 2: Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(self.number_of_trajectories*len(self.parameters), chunk_size)
-            self.run_mappers(mapper, aggregator, chunk_size=chunk_size, progress_bar=progress_bar)
+            self.run_mappers(mapper, aggregator, chunk_size=chunk_size, progress_bar=progress_bar, cache_results=cache_results)
             self.step2_complete=True
             self.step3_complete=False # To ensure that step 3 is always run after step 2 runs (as in the case of a re-execution).
         else:
@@ -820,12 +822,12 @@ class DistributedEnsemble():
         return reducer(self.mapped_results[0], parameters=self.parameters[0])
 
     #-----------------------------------------------------------------------------------
-    def run_mappers(self, mapper, aggregator, chunk_size=None, progress_bar=True):
+    def run_mappers(self, mapper, aggregator, chunk_size=None, progress_bar=True, cache_results=False):
         """ Run the mapper and aggrregator function on each of the simulation trajectories. """
+        num_results_to_compute = self.number_of_trajectories - self.number_of_results
         if self.running_MapReduceTask is None:
             sys.stderr.write('run_mappers(): Starting MapReduce Task\n')
             # If number_of_trajectories > 0 and number_of_results < number_of_trajectories, only run mappers on the 'new' trajectories.
-            num_results_to_compute = self.number_of_trajectories - self.number_of_results
             offset = self.number_of_results
             # chunks per parameter
             if chunk_size is None:
@@ -878,6 +880,7 @@ class DistributedEnsemble():
             self.running_MapReduceTask.wait()
 
     
+        sys.stderr.write("\n\nself.running_MapReduceTask.result={0}\n\n".format(self.running_MapReduceTask.result))
         # Process the results.
         cnt=0
         self.mapped_results = {}
@@ -893,8 +896,8 @@ class DistributedEnsemble():
                 self.mapped_results[param_set_id].append(r)
             cnt+=len(r)
             
-        if cnt != number_of_trajectories*len(self.parameters):
-            raise MolnsUtilException('run_mappers() number_of_trajectories={0} len(parameters)={1}, got {2} results'.format(number_of_trajectories, len(self.parameters), cnt))
+        if cnt != num_results_to_compute*len(self.parameters):
+            raise MolnsUtilException('run_mappers() num_results_to_compute={0} len(parameters)={1}, got {2} results'.format(num_results_to_compute, len(self.parameters), cnt))
         
         self.number_of_results = self.number_of_trajectories
         # Set the state to not running
@@ -963,6 +966,7 @@ class DistributedEnsemble():
             self.running_SimulationTask.wait()
 
 
+        sys.stderr.write("\n\nself.running_SimulationTask.result={0}\n\n".format(self.running_SimulationTask.result))
         # We process the results as they arrive.
         cnt=0
         for i,ret in enumerate(self.running_SimulationTask.result):
@@ -1023,6 +1027,8 @@ class DistributedEnsemble():
             self.c = IPython.parallel.Client()
         else:
             self.c = client
+        if len(self.c.ids) == 0:
+            raise MolnsUtilException("No parallel engines detected.  Molnsutil will not work in this situation.  Do you need to start more MOLNs workers?")
         self.c[:].use_dill()
         if self.num_engines == None:
             self.lv = self.c.load_balanced_view()
@@ -1036,6 +1042,9 @@ class DistributedEnsemble():
                 engines = self.c.ids[:self.num_engines]
                 self.lv = self.c.load_balanced_view(engines)
 
+        # Start a spin thread
+        self.c.stop_spin_thread()
+        self.c.spin_thread(interval=10)
         # Set the number of times a failed task is retried. This makes it possible to recover
         # from engine failure.
         self.lv.retries=3
@@ -1059,12 +1068,10 @@ class DistributedEnsemble():
         self.step2_complete = False
         self.save_state()
 
-
     def delete_results(self):
         """ Delete final results of the computation. """
         self.mapped_results = {}
-        raise Exception('TODO') #TODO
-
+        self.number_of_results = 0
 
     def delete_realizations(self):
         """ Delete realizations from the storage. """
