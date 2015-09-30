@@ -591,13 +591,13 @@ class DistributedEnsemble():
                                 ss.delete(filename)
                             except OSError as e:
                                 pass
+            # delete database file
+            os.remove('.molnsutil/{1}-{0}'.format(name, cls.my_class_name))
         except Exception as e:
             sys.stderr.write('delete(): {0}'.format(e))
-        # delete database file
-        os.remove('.molnsutil/{1}-{0}'.format(name, cls.my_class_name))
 
     #-----------------------------------------------------------------------------------
-    def __init__(self, name=None, model_class=None, parameters=None, client=None, num_engines=None):
+    def __init__(self, name=None, model_class=None, parameters=None, client=None, num_engines=None, ignore_model_mismatch=False):
         """ Constructor """
         if not isinstance(name, str):
             raise MolnsUtilException("name not specified")
@@ -609,7 +609,7 @@ class DistributedEnsemble():
         self.num_engines = num_engines
         self._update_client(client)
         try:
-            self.load_state()
+            self.load_state(ignore_model_mismatch=ignore_model_mismatch)
         except IOError as e:
             #sys.stderr.write('{0}'.format(e)) #DEBUGING
             self.parameters = [parameters]
@@ -674,16 +674,17 @@ class DistributedEnsemble():
             pickle.dump(state, fd)
 
     #-----------------------------------------------------------------------------------
-    def load_state(self):
+    def load_state(self, ignore_model_mismatch=False):
         """ Recover the state of an ensemble from a previous save. """
         with open('.molnsutil/{1}-{0}'.format(self.name, self.my_class_name)) as fd:
             state = pickle.load(fd)
-        if state['model_class'] != self.model_class:
-            sys.stderr.write("Error loading saved state\n\n")
-            sys.stderr.write("state['model_class']={0}\n\n".format(state['model_class']))
-            sys.stderr.write("self.model_class={0}\n\n".format(self.model_class))
-            sys.stderr.write("state['model_class'] != self.model_class {0}\n\n".format(state['model_class'] != self.model_class))
-            raise MolnsUtilException("Can only load state of a class that is identical to the original class. Use '{0}.delete(name=\"{1}\")' to remove previous state.".format(self.my_class_name, self.name))
+        if state['model_class'] != self.model_class and not ignore_model_mismatch:
+            #sys.stderr.write("Error loading saved state\n\n")
+            #sys.stderr.write("state['model_class']={0}\n\n".format(state['model_class']))
+            #sys.stderr.write("self.model_class={0}\n\n".format(self.model_class))
+            #sys.stderr.write("state['model_class'] != self.model_class {0}\n\n".format(state['model_class'] != self.model_class))
+            #TODO: Minor differences show up in the pickled string, but the classes are still identical.  Find a way around this.
+            raise MolnsUtilException("Can only load state of a class that is identical to the original class. Use '{0}.delete(name=\"{1}\")' to remove previous state.  Use the argument 'ignore_model_mismatch=True' to override".format(self.my_class_name, self.name))
             #TODO: Check to be sure the state is sane.  Both tasks can not be running, result list and number_of_trajectories should match up, (others?).
         
         self.parameters = state['parameters']
@@ -745,6 +746,11 @@ class DistributedEnsemble():
             raise MolnsUtilException("Storage mode already set to {0}, can not mix storage modes".format(self.storage_mode))
         if number_of_trajectories is None or number_of_trajectories == 0:
             raise MolnsUtilException("'number_of_trajectories' is zero.")
+        elif not store_realizations and self.number_of_trajectories > 0 and self.number_of_trajectories != number_of_trajectories:
+            raise MolnsUtilException("'number_of_trajectories' changed since first call.  Value can only be changed if store_realizations is True")
+            #TODO: Fix, if store_realizations is false, number_of_trajectories=0 after success
+        elif store_realizations and self.number_of_trajectories > 0 and self.number_of_trajectories > number_of_trajectories:
+            raise MolnsUtilException("'number_of_trajectories' less than first call. Can not reduce number of realizations.")
         # Check if the mapper, aggregator, and reducer functions are the same as previously run.  If not throw error.  Use 'clear_results()' to reset
         mapper_fn_pkl = cloudpickle.dumps(mapper)
         if self.mapper_fn is not None and self.mapper_fn != mapper_fn_pkl:
@@ -763,13 +769,20 @@ class DistributedEnsemble():
             self.reducer_fn = reducer_fn_pkl
         if self.number_of_trajectories > 0 and not store_realizations and self.number_of_trajectories != number_of_trajectories:
             raise MolnsUtilException("'number_of_trajectories' is not the same as the original call. It can only be changed if 'store_realizations' is True.")
-        
+
+        #####
+        # Shortcut, check if computation is complete
+        if self.step3_complete:
+            if verbose:
+                print "Using previously computed results."
+            return self.reduced_results
+
 
         ######
         # 1. Run simulations
-        sys.stderr.write("[1] self.number_of_trajectories < number_of_trajectories: {0} {1} {2}\n".format(self.number_of_trajectories,number_of_trajectories,self.number_of_trajectories < number_of_trajectories))
-        sys.stderr.write("[1] (not self.step1_complete): {0} {1} {2}\n".format(store_realizations, self.step1_complete, (not store_realizations and not self.step1_complete)))
-        if self.number_of_trajectories < number_of_trajectories or (not self.step1_complete):
+        #sys.stderr.write("[1] self.number_of_trajectories < number_of_trajectories: {0} {1} {2}\n".format(self.number_of_trajectories,number_of_trajectories,self.number_of_trajectories < number_of_trajectories))
+        #sys.stderr.write("[1] (not self.step1_complete): {0} {1}\n".format(self.step1_complete, (not store_realizations)))
+        if (not self.step1_complete) or (store_realizations == True and self.number_of_trajectories < number_of_trajectories):
             if verbose:
                 print "Step 1: Computing simulation trajectories."
             self.add_realizations( number_of_trajectories - self.number_of_trajectories, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode, progress_bar=progress_bar)
@@ -781,7 +794,7 @@ class DistributedEnsemble():
 
         ######
         # 2. Run Map function for the MapReduce post-processing
-        if self.number_of_results < self.number_of_trajectories or (not self.step2_complete):
+        if (not self.step2_complete) or (store_realizations == True and self.number_of_results < self.number_of_trajectories):
             if verbose:
                 print "Step 2: Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(self.number_of_trajectories*len(self.parameters), chunk_size)
             self.run_mappers(mapper, aggregator, chunk_size=chunk_size, progress_bar=progress_bar, cache_results=cache_results)
@@ -826,12 +839,14 @@ class DistributedEnsemble():
         """ Run the mapper and aggrregator function on each of the simulation trajectories. """
         num_results_to_compute = self.number_of_trajectories - self.number_of_results
         if self.running_MapReduceTask is None:
-            sys.stderr.write('run_mappers(): Starting MapReduce Task\n')
+            #sys.stderr.write('run_mappers(): Starting MapReduce Task\n')
             # If number_of_trajectories > 0 and number_of_results < number_of_trajectories, only run mappers on the 'new' trajectories.
             offset = self.number_of_results
             # chunks per parameter
             if chunk_size is None:
                 chunk_size = self._determine_chunk_size(num_results_to_compute)
+            #sys.stderr.write('chunk_size={0}, num_results_to_compute={1}\n'.format(chunk_size, num_results_to_compute))
+            if chunk_size < 1: chunk_size = 1
             num_chunks = int(math.ceil(num_results_to_compute/float(chunk_size)))
             chunks = [chunk_size]*(num_chunks-1)
             chunks.append(num_results_to_compute-chunk_size*(num_chunks-1))
@@ -848,15 +863,17 @@ class DistributedEnsemble():
                     for i in range(num_chunks):
                         presult_list.append( self.result_list[id][(i*chunk_size+offset):((i+1)*chunk_size+offset)] )
             except Exception as e:
-                sys.stderr.write('run_mappers(): caught exception while trying start MapReduce Task: {0}\n'.format(e))
-                sys.stderr.write('run_mappers(): self.parameters={0}\n'.format(self.parameters))
-                sys.stderr.write('run_mappers(): self.result_list={0}\n'.format(self.result_list))
+                #sys.stderr.write('run_mappers(): caught exception while trying start MapReduce Task: {0}\n'.format(e))
+                #sys.stderr.write('run_mappers(): self.parameters={0}\n'.format(self.parameters))
+                #sys.stderr.write('run_mappers(): self.result_list={0}\n'.format(self.result_list))
                 raise
 
             self.running_MapReduceTask = self.lv.map_async(map_and_aggregate, presult_list, param_set_ids, [mapper]*num_pchunks,[aggregator]*num_pchunks,[cache_results]*num_pchunks)
             self.save_state()
         else:
-            sys.stderr.write('run_mappers(): MapReduce Task already running\n')
+            #sys.stderr.write('run_mappers(): MapReduce Task already running\n')
+            pass
+        
 
 
         if progress_bar:
@@ -868,19 +885,19 @@ class DistributedEnsemble():
                           """.format(divid))
             display(pb)
             
-            sys.stderr.write('run_mappers(): running_MapReduceTask.ready()={0}\n'.format(self.running_MapReduceTask.ready()))
+            #sys.stderr.write('run_mappers(): running_MapReduceTask.ready()={0}\n'.format(self.running_MapReduceTask.ready()))
             while not self.running_MapReduceTask.ready():
                 self.running_MapReduceTask.wait(timeout=1)
                 progress = 100.0 * self.running_MapReduceTask.progress / len(self.running_MapReduceTask)
                 display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(+1)/len(self.running_MapReduceTask))))
             display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0)))
-            sys.stderr.write('run_mappers(): running_MapReduceTask.ready()={0}\n'.format(self.running_MapReduceTask.ready()))
+            #sys.stderr.write('run_mappers(): running_MapReduceTask.ready()={0}\n'.format(self.running_MapReduceTask.ready()))
         else:
-            sys.stderr.write('run_mappers(): waiting for MapReduce Task to complete (no progress bar)\n')
+            #sys.stderr.write('run_mappers(): waiting for MapReduce Task to complete (no progress bar)\n')
             self.running_MapReduceTask.wait()
 
     
-        sys.stderr.write("\n\nself.running_MapReduceTask.result={0}\n\n".format(self.running_MapReduceTask.result))
+        #sys.stderr.write("\n\nself.running_MapReduceTask.result={0}\n\n".format(self.running_MapReduceTask.result))
         # Process the results.
         cnt=0
         self.mapped_results = {}
@@ -922,7 +939,7 @@ class DistributedEnsemble():
                 print "Generating {0} realizations of the model (chunk size={1})".format(number_of_trajectories,chunk_size)
             
         if self.running_SimulationTask is None:
-            sys.stderr.write('add_realizations(): Starting Simulation Task\n')
+            #sys.stderr.write('add_realizations(): Starting Simulation Task\n')
             num_chunks = int(math.ceil(number_of_trajectories/float(chunk_size)))
             chunks = [chunk_size]*(num_chunks-1)
             chunks.append(number_of_trajectories-chunk_size*(num_chunks-1))
@@ -943,7 +960,8 @@ class DistributedEnsemble():
             self.running_SimulationTask  = self.lv.map_async(run_ensemble, [self.model_class]*num_pchunks, pparams, param_set_ids, seed_list, pchunks, [storage_mode]*num_pchunks)
             self.save_state()
         else:
-            sys.stderr.write('add_realizations(): Simulation Task already running\n')
+            #sys.stderr.write('add_realizations(): Simulation Task already running\n')
+            pass
 
         if progress_bar:
             divid = str(uuid.uuid4())
@@ -954,19 +972,19 @@ class DistributedEnsemble():
                           """.format(divid))
             display(pb)
             
-            sys.stderr.write("add_realizations(): running_SimulationTask.ready()={0}\n".format(self.running_SimulationTask.ready()))
+            #sys.stderr.write("add_realizations(): running_SimulationTask.ready()={0}\n".format(self.running_SimulationTask.ready()))
             while not self.running_SimulationTask.ready():
                 self.running_SimulationTask.wait(timeout=1)
                 progress = 100.0 * self.running_SimulationTask.progress / len(self.running_SimulationTask)
                 display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0*(+1)/len(self.running_SimulationTask))))
             display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0)))
-            sys.stderr.write("add_realizations(): running_SimulationTask.ready()={0}\n".format(self.running_SimulationTask.ready()))
+            #sys.stderr.write("add_realizations(): running_SimulationTask.ready()={0}\n".format(self.running_SimulationTask.ready()))
         else:
-            sys.stderr.write('add_realizations(): waiting for Simulation Task to complete (no progress bar)\n')
+            #sys.stderr.write('add_realizations(): waiting for Simulation Task to complete (no progress bar)\n')
             self.running_SimulationTask.wait()
 
 
-        sys.stderr.write("\n\nself.running_SimulationTask.result={0}\n\n".format(self.running_SimulationTask.result))
+        #sys.stderr.write("\n\nself.running_SimulationTask.result={0}\n\n".format(self.running_SimulationTask.result))
         # We process the results as they arrive.
         cnt=0
         for i,ret in enumerate(self.running_SimulationTask.result):
@@ -976,7 +994,7 @@ class DistributedEnsemble():
                 self.result_list[param_set_id] = []
             self.result_list[param_set_id].extend(r)
             cnt+=len(r)
-        sys.stderr.write('add_realizations(): stored {0} simulation results\n'.format(cnt))
+        #sys.stderr.write('add_realizations(): stored {0} simulation results\n'.format(cnt))
         if cnt != number_of_trajectories*len(self.parameters):
             raise MolnsUtilException('add_realizations() number_of_trajectories={0} len(parameters)={1}, got {2} results'.format(number_of_trajectories, len(self.parameters), cnt))
             
@@ -986,7 +1004,7 @@ class DistributedEnsemble():
         self.running_SimulationTask = None
         self.save_state()
 
-        sys.stderr.write('add_realizations(): self.result_list has {0} keys\n'.format(len(self.result_list)))
+        #sys.stderr.write('add_realizations(): self.result_list has {0} keys\n'.format(len(self.result_list)))
 
 
         return {'wall_time':wall_time,'serial_time':serial_time}
@@ -1051,7 +1069,7 @@ class DistributedEnsemble():
 
     def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
-        return int(max(1, round(number_of_trajectories/float(self.num_engines))))
+        return min(int(max(1, round(number_of_trajectories/float(self.num_engines)))),1)
 
     def _clear_cache(self):
         """ Remove all cached result objects on the engines. """
@@ -1064,12 +1082,12 @@ class DistributedEnsemble():
         self.mapper_fn = None
         self.aggregator_fn = None
         self.reducer_rn = None
-        self.step2_complete = False
-        self.step2_complete = False
+        self.step3_complete = False
         self.save_state()
 
     def delete_results(self):
         """ Delete final results of the computation. """
+        self.step2_complete = False
         self.mapped_results = {}
         self.number_of_results = 0
 
@@ -1088,6 +1106,7 @@ class DistributedEnsemble():
                     ss.delete(filename)
                 except OSError as e:
                     pass
+        self.step1_complete = False
         self.result_list = {}
         self.number_of_trajectories = 0
 
@@ -1101,7 +1120,7 @@ class ParameterSweep(DistributedEnsemble):
     
     my_class_name = 'ParameterSweep'
 
-    def __init__(self, name=None, model_class=None, parameters=None, client=None, num_engines=None):
+    def __init__(self, name=None, model_class=None, parameters=None, client=None, num_engines=None, ignore_model_mismatch=False):
         """ Constructor.
         Args:
           model_class: a class object of the model for simulation, must be a sub-class of URDMEModel
@@ -1123,7 +1142,7 @@ class ParameterSweep(DistributedEnsemble):
         self.num_engines = num_engines
         self._update_client(client)
         try:
-            self.load_state()
+            self.load_state(ignore_model_mismatch=ignore_model_mismatch)
         except IOError as e:
             #sys.stderr.write('load_state() raised: {0}\n'.format(e))
             self.number_of_trajectories = 0
