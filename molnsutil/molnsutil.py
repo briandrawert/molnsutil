@@ -71,7 +71,7 @@ import multiprocessing
 #   s3.json needs to be created and put in .molns/s3.json in the root of the home directory.
 
 import os
-def get_s3config():
+def get_persisistent_storage_config():
     """ Return the configuration for the persistent storage. """
     try:
         with open(os.environ['HOME']+'/.molns/s3.json','r') as fh:
@@ -131,7 +131,7 @@ class SharedStorage():
 
 class S3Provider():
     def __init__(self, bucket_name):
-        s3config = get_s3config()
+        s3config = get_persisistent_storage_config()
         self.connection = S3Connection(is_secure=False,
                                  calling_format=boto.s3.connection.OrdinaryCallingFormat(),
                                  **s3config['credentials']
@@ -193,7 +193,7 @@ class S3Provider():
 
 class SwiftProvider():
     def __init__(self, bucket_name):
-        s3config = get_s3config()
+        s3config = get_persisistent_storage_config()
         self.connection = swiftclient.client.Connection(auth_version=2.0,**s3config['credentials'])
         self.set_bucket(bucket_name)
 
@@ -257,7 +257,7 @@ class PersistentStorage():
     """
 
     def __init__(self, bucket_name=None):
-        s3config = get_s3config()
+        s3config = get_persisistent_storage_config()
         if bucket_name is None:
             # try reading it from the config file
             try:
@@ -608,10 +608,9 @@ class DistributedEnsemble():
         # Set the Ipython.parallel client
         self.num_engines = num_engines
         self._update_client(client)
-        try:
-            self.load_state(ignore_model_mismatch=ignore_model_mismatch)
-        except IOError as e:
-            #sys.stderr.write('{0}'.format(e)) #DEBUGING
+        
+        if not self.load_state(ignore_model_mismatch=ignore_model_mismatch):
+            # Set defaults if state not found
             self.parameters = [parameters]
             self.number_of_trajectories = 0
             self.seed_base = self.generate_seed_base()
@@ -676,41 +675,45 @@ class DistributedEnsemble():
     #-----------------------------------------------------------------------------------
     def load_state(self, ignore_model_mismatch=False):
         """ Recover the state of an ensemble from a previous save. """
-        with open('.molnsutil/{1}-{0}'.format(self.name, self.my_class_name)) as fd:
-            state = pickle.load(fd)
-        if state['model_class'] != self.model_class and not ignore_model_mismatch:
-            #sys.stderr.write("Error loading saved state\n\n")
-            #sys.stderr.write("state['model_class']={0}\n\n".format(state['model_class']))
-            #sys.stderr.write("self.model_class={0}\n\n".format(self.model_class))
-            #sys.stderr.write("state['model_class'] != self.model_class {0}\n\n".format(state['model_class'] != self.model_class))
-            #TODO: Minor differences show up in the pickled string, but the classes are still identical.  Find a way around this.
-            raise MolnsUtilException("Can only load state of a class that is identical to the original class. Use '{0}.delete(name=\"{1}\")' to remove previous state.  Use the argument 'ignore_model_mismatch=True' to override".format(self.my_class_name, self.name))
-            #TODO: Check to be sure the state is sane.  Both tasks can not be running, result list and number_of_trajectories should match up, (others?).
-        
-        self.parameters = state['parameters']
-        self.number_of_trajectories = state['number_of_trajectories']
-        self.seed_base = state['seed_base']
-        self.result_list = state['result_list']
-        self.storage_mode = state['storage_mode']
-        #
-        self.reduced_results = state['reduced_results']
-        self.mapped_results = state['mapped_results']
-        self.number_of_results = state['number_of_results']
-        self.step1_complete = state['step1_complete']
-        self.step2_complete = state['step2_complete']
-        self.step3_complete = state['step3_complete']
-        self.mapper_fn = state['mapper_fn']
-        self.aggregator_fn  = state['aggregator_fn']
-        self.reducer_fn = state['reducer_fn']
-        #
-        if state['running_MapReduceTask'] is None:
-            self.running_MapReduceTask = None
-        else:
-            self.running_MapReduceTask = self.c.get_result(state['running_MapReduceTask'])
-        if state['running_SimulationTask'] is None:
-            self.running_SimulationTask = None
-        else:
-            self.running_SimulationTask = self.c.get_result(state['running_SimulationTask'])
+        try:
+            with open('.molnsutil/{1}-{0}'.format(self.name, self.my_class_name)) as fd:
+                state = pickle.load(fd)
+            if state['model_class'] != self.model_class and not ignore_model_mismatch:
+                #sys.stderr.write("Error loading saved state\n\n")
+                #sys.stderr.write("state['model_class']={0}\n\n".format(state['model_class']))
+                #sys.stderr.write("self.model_class={0}\n\n".format(self.model_class))
+                #sys.stderr.write("state['model_class'] != self.model_class {0}\n\n".format(state['model_class'] != self.model_class))
+                #TODO: Minor differences show up in the pickled string, but the classes are still identical.  Find a way around this.
+                raise MolnsUtilException("Can only load state of a class that is identical to the original class. Use '{0}.delete(name=\"{1}\")' to remove previous state.  Use the argument 'ignore_model_mismatch=True' to override".format(self.my_class_name, self.name))
+                #TODO: Check to be sure the state is sane.  Both tasks can not be running, result list and number_of_trajectories should match up, (others?).
+            
+            self.parameters = state['parameters']
+            self.number_of_trajectories = state['number_of_trajectories']
+            self.seed_base = state['seed_base']
+            self.result_list = state['result_list']
+            self.storage_mode = state['storage_mode']
+            #
+            self.reduced_results = state['reduced_results']
+            self.mapped_results = state['mapped_results']
+            self.number_of_results = state['number_of_results']
+            self.step1_complete = state['step1_complete']
+            self.step2_complete = state['step2_complete']
+            self.step3_complete = state['step3_complete']
+            self.mapper_fn = state['mapper_fn']
+            self.aggregator_fn  = state['aggregator_fn']
+            self.reducer_fn = state['reducer_fn']
+            #
+            if state['running_MapReduceTask'] is None:
+                self.running_MapReduceTask = None
+            else:
+                self.running_MapReduceTask = self.c.get_result(state['running_MapReduceTask'])
+            if state['running_SimulationTask'] is None:
+                self.running_SimulationTask = None
+            else:
+                self.running_SimulationTask = self.c.get_result(state['running_SimulationTask'])
+            return True
+        except IOError as e:
+            return False
 
     #-----------------------------------------------------------------------------------
     # MAIN FUNCTION
@@ -1141,10 +1144,8 @@ class ParameterSweep(DistributedEnsemble):
         # Set the Ipython.parallel client
         self.num_engines = num_engines
         self._update_client(client)
-        try:
-            self.load_state(ignore_model_mismatch=ignore_model_mismatch)
-        except IOError as e:
-            #sys.stderr.write('load_state() raised: {0}\n'.format(e))
+        if not self.load_state(ignore_model_mismatch=ignore_model_mismatch):
+            # State not found, set defaults
             self.number_of_trajectories = 0
             self.seed_base = self.generate_seed_base()
             self.storage_mode = None
