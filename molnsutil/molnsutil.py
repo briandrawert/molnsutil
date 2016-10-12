@@ -1139,7 +1139,7 @@ class ParameterSweep(DistributedEnsemble):
         """ Inside the run() function, apply the reducer to all of the mapped-aggregated result values. """
         ret = ParameterSweepResultList()
         for param_set_id, param in enumerate(self.parameters):
-            ret.append(ParameterSweepResult(reducer(mapped_results[param_set_id]), parameters=param))  # This was passed in to reducer: parameters=param
+            ret.append(ParameterSweepResult(reducer(mapped_results[param_set_id], parameters=param), parameters=param))  # This was passed in to reducer: parameters=param
         return ret
         # --------------------------
 
