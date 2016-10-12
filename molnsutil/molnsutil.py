@@ -25,9 +25,9 @@
 
 """
 
+from utils import Log
 import boto
 import boto.ec2
-from os import environ
 import logging
 from boto.s3.connection import S3Connection
 
@@ -79,7 +79,8 @@ def get_s3config():
         return s3config
     except IOError as e:
         logging.warning("Credentials file " + os.environ[
-            'HOME'] + '/.molns/s3.json' + ' missing. You will not be able to connect to S3 or Swift. Please create this file.')
+            'HOME'] + '/.molns/s3.json' + ' missing. You will not be able to connect to S3 or Swift. '
+                                          'Please create this file.')
         return {}
 
 
@@ -251,7 +252,7 @@ class SwiftProvider():
 
 class PersistentStorage():
     """
-       Provides an abstaction for interacting with the Object Stores
+       Provides an abstraction for interacting with the Object Stores
        of the supported clouds.
     """
 
@@ -400,6 +401,7 @@ def builtin_reducer_mean_variance(result_list, parameters=None):
         n += r[2]
     return (sum / n, (sum2 - (sum ** 2) / n) / n)
 
+
 def _create_model(model_class, parameters):
     try:
         model_class_cls = cloudpickle.loads(model_class)
@@ -413,6 +415,7 @@ def _create_model(model_class, parameters):
         notes = "Error instantiation the model class, caught {0}: {1}\n".format(type(e), e)
         notes += "dir={0}\n".format(dir())
         raise MolnsUtilException(notes)
+
 
 # ----- functions to use for the DistributedEnsemble class ----
 def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_base, number_of_trajectories, mapper,
@@ -581,6 +584,21 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
     # return res
 
 
+def _display_progressbar():
+    # This should be factored out somehow.
+    divid = str(uuid.uuid4())
+    pb = HTML("""<div style="border: 1px solid black; width:500px">
+    <div id="{0}" style="background-color:blue; width:0%">&nbsp;</div></div>""".format(divid))
+    display(pb)
+    return divid
+
+
+def _update_progressbar(divid, i, length):
+    if divid is None:
+        return
+    display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0 * (i + 1) / length)))
+
+
 class DistributedEnsemble():
     """ A class to provide an API for execution of a distributed ensemble. """
 
@@ -596,10 +614,13 @@ class DistributedEnsemble():
         self.result_list = {}
         self.qsub = qsub
 
+        self.log = Log()
+
         if qsub is True:
             self.qsub_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "job_submission.pbs")
             self.job_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "ComputeEnsemble.py")
-            self.molns_cloudpickle_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "molns_cloudpickle.py")
+            self.molns_cloudpickle_file = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                                       "molns_cloudpickle.py")
             self.molnstutil_init_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "__init__.py")
             self.job_input_file_name = "input"
         else:
@@ -640,7 +661,7 @@ class DistributedEnsemble():
         self.storage_mode = state['storage_mode']
 
     def _run_ipython_and_store_realisations(self, mapper, aggregator=None, cache_results=False, storage_mode="Shared",
-                                            number_of_trajectories=None, chunk_size=None, verbose=True):
+                                            number_of_trajectories=None, chunk_size=None):
         if self.storage_mode is None:
             if storage_mode != "Persistent" and storage_mode != "Shared":
                 raise MolnsUtilException("Acceptable values for 'storage_mode' are 'Persistent' or 'Shared'")
@@ -652,11 +673,11 @@ class DistributedEnsemble():
         # Run simulations
         if self.number_of_trajectories < number_of_trajectories:
             self.add_realizations(number_of_trajectories - self.number_of_trajectories, chunk_size=chunk_size,
-                                  verbose=verbose, storage_mode=storage_mode)
+                                  storage_mode=storage_mode)
 
-        if verbose:
-            print "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(
-                self.number_of_trajectories * len(self.parameters), chunk_size)
+        self.log.write_log(
+            "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(
+                self.number_of_trajectories * len(self.parameters), chunk_size))
 
         # chunks per parameter
         num_chunks = int(math.ceil(self.number_of_trajectories / float(chunk_size)))
@@ -693,11 +714,11 @@ class DistributedEnsemble():
             pparams.extend([param] * num_chunks)
         return pparams, param_set_ids
 
-    def _run_ipython(self, mapper, number_of_trajectories=None, chunk_size=None, verbose=True, aggregator=None):
+    def _run_ipython(self, mapper, number_of_trajectories=None, chunk_size=None, aggregator=None):
         # If we don't store the realizations (or use the stored ones)
-        if verbose:
-            print "Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})".format(
-                number_of_trajectories, chunk_size)
+        self.log.write_log(
+            "Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})".format(
+                number_of_trajectories, chunk_size))
 
         # chunks per parameter
         num_chunks = int(math.ceil(number_of_trajectories / float(chunk_size)))
@@ -719,52 +740,66 @@ class DistributedEnsemble():
         import shutil
         from subprocess import Popen
 
+        if type(dirs_to_delete) is not type([]) or type(containers_to_delete) is not type([]):
+            raise MolnsUtilException("Unexpected type. Expecting {0}.".format(type([])))
+
         if dirs_to_delete is not None:
-            for dire in dirs_to_delete:
-                print "removing {0}".format(dire)
-                shutil.rmtree(dire)
+            for directory in dirs_to_delete:
+                self.log.write_log("removing {0}".format(directory))
+                shutil.rmtree(directory)
 
         if containers_to_delete is not None:
-            print "removing finished containers.."
+            self.log.write_log("removing finished containers..")
             for container in containers_to_delete:
                 Popen(['sudo', 'docker', 'rm', '-f', container], shell=False)
 
-    def _wait_for_all_results_to_return(self, dirs):
+    def _wait_for_all_results_to_return(self, dirs, divid=None):
         import time
-        print "waiting for all results to be computed.."
 
         completed_jobs = 0
         successful_jobs = 0
         keep_dirs = []
+        total_jobs = len(dirs)
 
-        print "Awaiting all results..."
+        self.log.write_log("Awaiting all results...")
+
         while len(dirs) > 0:
-            for dir in dirs:
-                output_file = os.path.join(dir, "output")
-                completed_file = os.path.join(dir, "complete")
+            for directory in dirs:
+                output_file = os.path.join(directory, "output")
+                completed_file = os.path.join(directory, "complete")
+
                 if os.path.exists(output_file):
-                    dirs.remove(dir)
+                    dirs.remove(directory)
                     successful_jobs += 1
                     completed_jobs += 1
-                    print "{0} exists".format(output_file)
+                    self.log.write_log("{0} exists".format(output_file))
+
                 elif os.path.exists(completed_file):
-                    keep_dirs.append(dir)
-                    dirs.remove(dir)
+                    if os.path.exists(output_file):  # There could be a race condition here.
+                        continue
+                    keep_dirs.append(directory)
+                    dirs.remove(directory)
                     completed_jobs += 1
+
                 else:
-                    print "{0} does not exist".format(completed_file)
+                    self.log.write_log("{0} does not exist".format(completed_file))
+                if divid is not None:
+                    _update_progressbar(divid, completed_jobs, total_jobs)
             time.sleep(1)
 
         if completed_jobs > successful_jobs:
-            print "{0} job(s) did not complete successfully. Their working directories will NOT be deleted.".format(completed_jobs - successful_jobs)
+            self.log.write_log(
+                "{0} job(s) did not complete successfully. Their working directories will NOT be deleted."
+                    .format(completed_jobs - successful_jobs))
 
         return keep_dirs
 
-    def _get_unpickled_result(self, dir):
-        with open(os.path.join(dir, "output"), "rb") as output:
+    @staticmethod
+    def _get_unpickled_result(directory):
+        with open(os.path.join(directory, "output"), "rb") as output:
             return pickle.load(output)
 
-    def _run_qsub(self, mapper, reducer=None, aggregator=None, number_of_trajectories=None, chunk_size=None, verbose=True):
+    def _run_qsub(self, mapper, aggregator=None, number_of_trajectories=None, chunk_size=None, divid=None):
         import shutil
         from subprocess import Popen
 
@@ -775,9 +810,8 @@ class DistributedEnsemble():
         dirs = []
         containers = []
 
-        if verbose:
-            print "Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})".format(
-                number_of_trajectories, chunk_size)
+        self.log.write_log("Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})"
+                           .format(number_of_trajectories, chunk_size))
 
         if aggregator is None:
             aggregator = builtin_aggregator_list_append
@@ -811,44 +845,39 @@ class DistributedEnsemble():
             shutil.copyfile(self.molns_cloudpickle_file, os.path.join(temp_job_directory, "molns_cloudpickle.py"))
 
             containers.append(job_name)
-            # invoke qsub to star container with same name as job_name
+            # invoke qsub to start container with same name as job_name
             Popen(['qsub', '-d', temp_job_directory, '-N', job_name, self.qsub_file], shell=False)
 
             dirs.append(temp_job_directory)
             job_param_ids[temp_job_directory] = pndx
             counter += 1
-            temp_dirs = dirs[:]
 
-        keep_dirs = self._wait_for_all_results_to_return(temp_dirs)
+        temp_dirs = dirs[:]
+        keep_dirs = self._wait_for_all_results_to_return(temp_dirs, divid=divid)
 
-        # We process the results as they arrive.
+        # Process only the results successfully computed into a format compatible with self.run_reducer.
+        remove_dirs = [directory for directory in dirs if directory not in keep_dirs]
         mapped_results = {}
-        for dir in dirs:
-            unpickled_result = self._get_unpickled_result(dir)
-            #import pdb
-            #pdb.set_trace()
-            param_set_id = job_param_ids[dir]
+        for directory in remove_dirs:
+            unpickled_result = self._get_unpickled_result(directory)
+            param_set_id = job_param_ids[directory]
             if param_set_id not in mapped_results:
                 mapped_results[param_set_id] = []
             if type(unpickled_result) is type([]):
                 mapped_results[param_set_id].extend(unpickled_result)  # if a list is returned, extend that list
             else:
                 mapped_results[param_set_id].append(unpickled_result)
-            #if progress_bar:
-            #    display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0 * (i + 1) / len(results))))
 
-        print "cleaning up.."
+        self.log.write_log("Cleaning up..")
 
-        # remove temporary files and finished containers.
-        remove_dirs = [dir for dir in dirs if dir not in keep_dirs]
-        self._clean_up(remove_dirs, containers)
-
+        # remove temporary files and finished containers. Keep all files that record errors.
+        dirs_to_delete = remove_dirs
         if len(keep_dirs) == 0:
-            self._clean_up(dirs_to_delete=[base_dir])
+            dirs_to_delete = [base_dir]
 
-        print "reducing results.."
+        self._clean_up(dirs_to_delete=dirs_to_delete, containers_to_delete=containers)
 
-        return self.run_reducer(reducer=reducer, mapped_results=mapped_results)
+        return mapped_results
 
     # --------------------------
     # MAIN FUNCTION
@@ -856,6 +885,8 @@ class DistributedEnsemble():
     def run(self, mapper, aggregator=None, reducer=None, number_of_trajectories=None, chunk_size=None,
             verbose=True, progress_bar=True, store_realizations=True, storage_mode="Shared", cache_results=False):
         """ Main entry point """
+
+        self.log.verbose = verbose
 
         if reducer is None:
             reducer = builtin_reducer_default
@@ -867,25 +898,20 @@ class DistributedEnsemble():
         if number_of_trajectories is None and self.number_of_trajectories == 0:
             raise MolnsUtilException("number_of_trajectories is zero")
 
+        divid = None
+        if progress_bar:
+            divid = _display_progressbar()
+
         if self.qsub is False:
             if store_realizations:
                 results = self._run_ipython_and_store_realisations(mapper=mapper, aggregator=aggregator,
                                                                    cache_results=cache_results,
                                                                    storage_mode=storage_mode,
                                                                    number_of_trajectories=number_of_trajectories,
-                                                                   chunk_size=chunk_size, verbose=verbose)
+                                                                   chunk_size=chunk_size)
             else:
                 results = self._run_ipython(mapper, aggregator=aggregator, chunk_size=chunk_size,
-                                            number_of_trajectories=number_of_trajectories, verbose=verbose)
-            if progress_bar and verbose:
-                # This should be factored out somehow.
-                divid = str(uuid.uuid4())
-                pb = HTML("""
-                              <div style="border: 1px solid black; width:500px">
-                              <div id="{0}" style="background-color:blue; width:0%">&nbsp;</div>
-                              </div>
-                              """.format(divid))
-                display(pb)
+                                            number_of_trajectories=number_of_trajectories)
 
             # We process the results as they arrive.
             mapped_results = {}
@@ -899,27 +925,28 @@ class DistributedEnsemble():
                 else:
                     mapped_results[param_set_id].append(r)
                 if progress_bar:
-                    display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0 * (i + 1) / len(results))))
-
-            if verbose:
-                print "Running reducer on mapped and aggregated results (size={0})".format(len(mapped_results[0]))
-
-            # Run reducer
-            return self.run_reducer(reducer, mapped_results)
+                    _update_progressbar(divid, i, len(results))
 
         else:
             if store_realizations:
                 raise MolnsUtilException("Cannot store realisations while using qsub.")
             else:
-                return self._run_qsub(mapper, reducer=reducer, number_of_trajectories=number_of_trajectories,
-                                      chunk_size=chunk_size, verbose=verbose, aggregator=aggregator)
+                mapped_results = self._run_qsub(mapper, number_of_trajectories=number_of_trajectories,
+                                                chunk_size=chunk_size, aggregator=aggregator,
+                                                divid=divid)
+
+            self.log.write_log("Running reducer on mapped and aggregated results (size={0})"
+                               .format(len(mapped_results[0])))
+
+        # Run reducer
+        return self.run_reducer(reducer, mapped_results)
 
     def run_reducer(self, reducer, mapped_results):
-        """ Inside the run() function, apply the reducer to all of the map'ped-aggregated result values. """
+        """ Inside the run() function, apply the reducer to all of the mapped-aggregated result values. """
         return reducer(mapped_results[0], parameters=self.parameters[0])
 
     # --------------------------
-    def add_realizations(self, number_of_trajectories=None, chunk_size=None, verbose=True, progress_bar=True,
+    def add_realizations(self, number_of_trajectories=None, chunk_size=None, progress_bar=True,
                          storage_mode="Shared"):
         """ Add a number of realizations to the ensemble. """
         if number_of_trajectories is None:
@@ -930,15 +957,17 @@ class DistributedEnsemble():
         if chunk_size is None:
             chunk_size = self._determine_chunk_size(number_of_trajectories)
 
-        if not verbose:
+        if not self.log.verbose:
             progress_bar = False
         else:
             if len(self.parameters) > 1:
-                print "Generating {0} realizations of the model at {1} parameter points (chunk size={2})".format(
-                    number_of_trajectories, len(self.parameters), chunk_size)
+                self.log.write_log(
+                    "Generating {0} realizations of the model at {1} parameter points (chunk size={2})".format(
+                        number_of_trajectories, len(self.parameters), chunk_size))
             else:
-                print "Generating {0} realizations of the model (chunk size={1})".format(number_of_trajectories,
-                                                                                         chunk_size)
+                self.log.write_log(
+                    "Generating {0} realizations of the model (chunk size={1})".format(number_of_trajectories,
+                                                                                       chunk_size))
 
         self.number_of_trajectories += number_of_trajectories
 
@@ -988,8 +1017,8 @@ class DistributedEnsemble():
 
     def mean_variance(self, mapper=None, number_of_trajectories=None, chunk_size=None, verbose=True,
                       store_realizations=True, storage_mode="Shared", cache_results=False):
-        """ Compute the mean and variance (second order central moment) of the function g(X) based on number_of_trajectories realizations
-            in the ensemble. """
+        """ Compute the mean and variance (second order central moment) of the function g(X) based on
+        number_of_trajectories realizations in the ensemble. """
         return self.run(mapper=mapper, aggregator=builtin_aggregator_sum_and_sum2,
                         reducer=builtin_reducer_mean_variance, number_of_trajectories=number_of_trajectories,
                         chunk_size=chunk_size, verbose=verbose, store_realizations=store_realizations,
@@ -1021,7 +1050,7 @@ class DistributedEnsemble():
         else:
             self.c = client
         self.c[:].use_dill()
-        if self.num_engines == None:
+        if self.num_engines is None:
             self.lv = self.c.load_balanced_view()
             self.num_engines = len(self.c.ids)
         else:
@@ -1085,11 +1114,10 @@ class ParameterSweep(DistributedEnsemble):
             """
 
         if qsub is True:
-            print "Using qsub."
             if client is not None:
-                print "Ignoring parameter \"client\""
+                print("Ignoring parameter \"client\"")
             if num_engines is not None:
-                print "ignoring parameter \"num_engines\""
+                print("ignoring parameter \"num_engines\"")
             DistributedEnsemble.__init__(self, model_class, parameters, qsub=True)
 
         else:
@@ -1139,7 +1167,8 @@ class ParameterSweep(DistributedEnsemble):
         """ Inside the run() function, apply the reducer to all of the mapped-aggregated result values. """
         ret = ParameterSweepResultList()
         for param_set_id, param in enumerate(self.parameters):
-            ret.append(ParameterSweepResult(reducer(mapped_results[param_set_id], parameters=param), parameters=param))  # This was passed in to reducer: parameters=param
+            ret.append(ParameterSweepResult(reducer(mapped_results[param_set_id], parameters=param),
+                                            parameters=param))  # This was passed in to reducer: parameters=param
         return ret
         # --------------------------
 
