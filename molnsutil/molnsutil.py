@@ -31,7 +31,7 @@ import boto.ec2
 from os import environ
 import logging
 from boto.s3.connection import S3Connection
-logging.basicConfig(filename="boto.log", level=logging.DEBUG)
+#logging.basicConfig(filename="boto.log", level=logging.DEBUG)
 from boto.s3.key import Key
 import uuid
 import math
@@ -417,7 +417,7 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
     # Run the solver
     res = None
     num_processed = 0
-    results = model.run(seed=seed_base, number_of_trajectories=int(number_of_trajectories))
+    results = model.run(seed=seed_base, number_of_trajectories=number_of_trajectories)
     if not isinstance(results, list):
         results = [results]
     #for i in range(number_of_trajectories):
@@ -485,7 +485,7 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     # Run the solver
     filenames = []
     processes=[]
-    results = model.run(seed=seed_base, number_of_trajectories=int(number_of_trajectories))
+    results = model.run(seed=seed_base, number_of_trajectories=number_of_trajectories)
     if not isinstance(results, list):
         results = [results]
     for result in results:
@@ -631,12 +631,7 @@ class DistributedEnsemble():
     #-----------------------------------------------------------------------------------
     def generate_seed_base(self):
         """ Create a random number and truncate to 64 bits. """
-        x = int(uuid.uuid4())
-        if x.bit_length() >= 64:
-            x = x & ((1<<64)-1)
-            if x > (1 << 63) -1:
-                x -= 1 << 64
-        return x
+        return abs(int(random.getrandbits(31)))
 
     #-----------------------------------------------------------------------------------
     def save_state(self):
@@ -678,9 +673,7 @@ class DistributedEnsemble():
         try:
             with open('.molnsutil/{1}-{0}'.format(self.name, self.my_class_name)) as fd:
                 state = pickle.load(fd)
-            if self.model_class is None:
-                self.model_class = state['model_class']
-            elif state['model_class'] != self.model_class and not ignore_model_mismatch:
+            if state['model_class'] != self.model_class and not ignore_model_mismatch:
                 #sys.stderr.write("Error loading saved state\n\n")
                 #sys.stderr.write("state['model_class']={0}\n\n".format(state['model_class']))
                 #sys.stderr.write("self.model_class={0}\n\n".format(self.model_class))
@@ -741,56 +734,41 @@ class DistributedEnsemble():
         """
         #####
         # 0. Validate input.
-        #if mapper is None or not hasattr(mapper, '__call__'):
-        #    raise MolnsUtilException("mapper function not specified")
+        if mapper is None or not hasattr(mapper, '__call__'):
+            raise MolnsUtilException("mapper function not specified")
         if self.storage_mode is None:
             if storage_mode != "Persistent" and storage_mode != "Shared":
                 raise MolnsUtilException("Acceptable values for 'storage_mode' are 'Persistent' or 'Shared'")
             self.storage_mode = storage_mode
         elif self.storage_mode != storage_mode:
             raise MolnsUtilException("Storage mode already set to {0}, can not mix storage modes".format(self.storage_mode))
-
-##################################
-# Fix below
-#        if number_of_trajectories is None or number_of_trajectories == 0:
-#            raise MolnsUtilException("'number_of_trajectories' is zero.")
-#        elif not store_realizations and self.number_of_trajectories > 0 and self.number_of_trajectories != number_of_trajectories:
-#            raise MolnsUtilException("'number_of_trajectories' changed since first call.  Value can only be changed if store_realizations is True")
-#            #TODO: Fix, if store_realizations is false, number_of_trajectories=0 after success
-#        elif store_realizations and self.number_of_trajectories > 0 and self.number_of_trajectories > number_of_trajectories:
-#            raise MolnsUtilException("'number_of_trajectories' less than first call. Can not reduce number of realizations.")
-#        
-#        ##########
-#
-#        if self.number_of_trajectories > 0 and not store_realizations and self.number_of_trajectories != number_of_trajectories:
-#            raise MolnsUtilException("'number_of_trajectories' is not the same as the original call. It can only be changed if 'store_realizations' is True.")
-
-#Fix above
-##################################
-
-        
+        if number_of_trajectories is None or number_of_trajectories == 0:
+            raise MolnsUtilException("'number_of_trajectories' is zero.")
+        elif not store_realizations and self.number_of_trajectories > 0 and self.number_of_trajectories != number_of_trajectories:
+            raise MolnsUtilException("'number_of_trajectories' changed since first call.  Value can only be changed if store_realizations is True")
+            #TODO: Fix, if store_realizations is false, number_of_trajectories=0 after success
+        elif store_realizations and self.number_of_trajectories > 0 and self.number_of_trajectories > number_of_trajectories:
+            raise MolnsUtilException("'number_of_trajectories' less than first call. Can not reduce number of realizations.")
         # Check if the mapper, aggregator, and reducer functions are the same as previously run.  If not throw error.  Use 'clear_results()' to reset
-        if mapper is not None:
-            mapper_fn_pkl = cloudpickle.dumps(mapper)
-#            if self.mapper_fn is not None and self.mapper_fn != mapper_fn_pkl:
-#                raise MolnsUtilException("'mapper' function has changed since results have been computed.  Use 'clear_results()' to reset.")
-#            else:
+        mapper_fn_pkl = cloudpickle.dumps(mapper)
+        if self.mapper_fn is not None and self.mapper_fn != mapper_fn_pkl:
+            raise MolnsUtilException("'mapper' function has changed since results have been computed.  Use 'clear_results()' to reset.")
+        else:
             self.mapper_fn = mapper_fn_pkl
-        if aggregator is not None:
-            aggregator_fn_pkl = cloudpickle.dumps(aggregator)
-#            if self.aggregator_fn is not None and self.aggregator_fn != aggregator_fn_pkl:
-#                raise MolnsUtilException("'aggregator' function has changed since results have been computed.  Use 'clear_results()' to reset.")
-#            else:
+        aggregator_fn_pkl = cloudpickle.dumps(aggregator)
+        if self.aggregator_fn is not None and self.aggregator_fn != aggregator_fn_pkl:
+            raise MolnsUtilException("'aggregator' function has changed since results have been computed.  Use 'clear_results()' to reset.")
+        else:
             self.aggregator_fn = aggregator_fn_pkl
-        if reducer is not None:
-            reducer_fn_pkl = cloudpickle.dumps(reducer)
-        #if self.reducer_fn is not None and self.reducer_fn != reducer_fn_pkl:
-        #    raise MolnsUtilException("'reducer' function has changed since results have been computed.  Use 'clear_results()' to reset.")
-        #else:
-        #    self.reducer_fn = reducer_fn_pkl
+        reducer_fn_pkl = cloudpickle.dumps(reducer)
+        if self.reducer_fn is not None and self.reducer_fn != reducer_fn_pkl:
+            raise MolnsUtilException("'reducer' function has changed since results have been computed.  Use 'clear_results()' to reset.")
+        else:
             self.reducer_fn = reducer_fn_pkl
+        if self.number_of_trajectories > 0 and not store_realizations and self.number_of_trajectories != number_of_trajectories:
+            raise MolnsUtilException("'number_of_trajectories' is not the same as the original call. It can only be changed if 'store_realizations' is True.")
 
-        ##################################
+        #####
         # Shortcut, check if computation is complete
         if self.step3_complete:
             if verbose:
@@ -802,7 +780,7 @@ class DistributedEnsemble():
         # 1. Run simulations
         #sys.stderr.write("[1] self.number_of_trajectories < number_of_trajectories: {0} {1} {2}\n".format(self.number_of_trajectories,number_of_trajectories,self.number_of_trajectories < number_of_trajectories))
         #sys.stderr.write("[1] (not self.step1_complete): {0} {1}\n".format(self.step1_complete, (not store_realizations)))
-        if (number_of_trajectories is not None) or (not self.step1_complete) or (store_realizations == True and self.number_of_trajectories < number_of_trajectories):
+        if (not self.step1_complete) or (store_realizations == True and self.number_of_trajectories < number_of_trajectories):
             if verbose:
                 print "Step 1: Computing simulation trajectories."
             self.add_realizations( number_of_trajectories - self.number_of_trajectories, chunk_size=chunk_size, verbose=verbose, storage_mode=storage_mode, progress_bar=progress_bar)
@@ -1062,7 +1040,7 @@ class DistributedEnsemble():
     def _update_client(self, client=None):
         """ Setup the IPython.parallel.Client() object. """
         if client is None:
-            self.c = IPython.parallel.Client()
+            self.c = IPython.parallel.Client(profile='molns')
         else:
             self.c = client
         if len(self.c.ids) == 0:
@@ -1089,8 +1067,7 @@ class DistributedEnsemble():
 
     def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
-        return 1
-        #return min(int(max(1, round(number_of_trajectories/float(self.num_engines)))),1)
+        return min(int(max(1, round(number_of_trajectories/float(self.num_engines)))),1)
 
     def _clear_cache(self):
         """ Remove all cached result objects on the engines. """
@@ -1144,7 +1121,7 @@ class ParameterSweep(DistributedEnsemble):
     def __init__(self, name=None, model_class=None, parameters=None, client=None, num_engines=None, ignore_model_mismatch=False):
         """ Constructor.
         Args:
-          model_class: a class object of the model for simulation, must be a sub-class of URDMEModel
+          model_class: a class object of the model for simulation
           parameters:  either a dict or a list.
             If it is a dict, the keys are the arguments to the class constructions and the
               values are a list of values that argument should take.
@@ -1157,10 +1134,8 @@ class ParameterSweep(DistributedEnsemble):
             raise MolnsUtilException("name not specified")
         self.name = name
         if not inspect.isclass(model_class):
-            #raise MolnsUtilException("model_class not a class")
-            self.model_class = None
-        else:
-            self.model_class = cloudpickle.dumps(model_class)
+            raise MolnsUtilException("model_class not a class")
+        self.model_class = cloudpickle.dumps(model_class)
         # Set the Ipython.parallel client
         self.num_engines = num_engines
         self._update_client(client)
@@ -1209,11 +1184,10 @@ class ParameterSweep(DistributedEnsemble):
 
     def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
-        return 1
-        #num_params = len(self.parameters)
-        #if num_params >= self.num_engines:
-        #    return number_of_trajectories
-        #return int(max(1, math.ceil(number_of_trajectories*num_params/float(self.num_engines))))
+        num_params = len(self.parameters)
+        if num_params >= self.num_engines:
+            return number_of_trajectories
+        return int(max(1, math.ceil(number_of_trajectories*num_params/float(self.num_engines))))
 
     def run_reducer(self, reducer):
         """ Inside the run() function, apply the reducer to all of the map'ped-aggregated result values. """
