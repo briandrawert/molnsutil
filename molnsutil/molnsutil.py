@@ -1040,7 +1040,7 @@ class DistributedEnsemble():
     def _update_client(self, client=None):
         """ Setup the IPython.parallel.Client() object. """
         if client is None:
-            self.c = IPython.parallel.Client(profile='molns')
+            self.c = IPython.parallel.Client(profile='default')
         else:
             self.c = client
         if len(self.c.ids) == 0:
