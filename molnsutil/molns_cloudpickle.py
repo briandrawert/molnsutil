@@ -855,6 +855,11 @@ def dumps(obj, protocol=2):
 def loads(s):
     return pickle.loads(s)
 
+def load(filename):
+    with open(filename, "rb") as inp:
+        unpickled_list = pickle.load(inp)
+    return unpickled_list
+
 #hack for __import__ not working as desired
 def subimport(name):
     __import__(name)
