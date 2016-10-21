@@ -472,7 +472,7 @@ class DistributedEnsemble:
         self.log.write_log("Cleaning up..")
 
         # Arrange for generated files to be available in a know location - base_dir.
-        _post_process(remove_dirs, base_dir)
+        DistributedEnsemble._post_process(remove_dirs, base_dir)
 
         # Delete job containers and directories. Preserve base_dir as it contains computed realizations.
         clean_up(dirs_to_delete=remove_dirs, containers_to_delete=containers)
