@@ -1,9 +1,11 @@
 import copy
 import uuid
-import molns_cloudpickle as cloudpickle
-from storage_providers import SharedStorage, PersistentStorage
-from molns_exceptions import MolnsUtilException
+
 from IPython.display import HTML, Javascript, display
+
+import molns_cloudpickle as cloudpickle
+from molns_exceptions import MolnsUtilException
+from storage_providers import SharedStorage, PersistentStorage
 
 
 # ------  default aggregators -----

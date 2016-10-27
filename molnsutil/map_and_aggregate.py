@@ -1,9 +1,10 @@
 import pickle
+
+import constants
 import molns_cloudpickle as cloudpickle
+from molns_exceptions import MolnsUtilException, MolnsUtilStorageException
 from storage_providers import PersistentStorage, LocalStorage, SharedStorage
 from utils import builtin_aggregator_list_append
-from molns_exceptions import MolnsUtilException, MolnsUtilStorageException
-import constants
 
 
 def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_results=False,

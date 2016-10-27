@@ -1,13 +1,15 @@
-import os
 import json
+import logging
+import os
+import uuid
+
 import boto
 import boto.ec2
-import logging
-import uuid
 import swiftclient
-import molns_cloudpickle as cloudpickle
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
+
+import molns_cloudpickle as cloudpickle
 from molns_exceptions import MolnsUtilStorageException
 
 

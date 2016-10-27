@@ -1,20 +1,22 @@
-import math
-import molns_cloudpickle as cloudpickle
-import IPython.parallel
-import uuid
-import pickle
 import itertools
 import logging
+import math
 import os
+import pickle
+import uuid
+
+import IPython.parallel
+
 import constants
+import molns_cloudpickle as cloudpickle
+from map_and_aggregate import map_and_aggregate
+from molns_exceptions import MolnsUtilException
+from run_ensemble import run_ensemble
+from run_ensemble_map_aggregate import run_ensemble_map_and_aggregate
+from storage_providers import SharedStorage, PersistentStorage
 from utils import Log, clean_up, update_progressbar, display_progressbar, builtin_reducer_mean, generate_seed_base, \
     builtin_aggregator_list_append, builtin_reducer_default, builtin_aggregator_sum_and_sum2, builtin_aggregator_add, \
     builtin_reducer_mean_variance, get_unpickled_result
-from run_ensemble import run_ensemble
-from run_ensemble_map_aggregate import run_ensemble_map_and_aggregate
-from map_and_aggregate import map_and_aggregate
-from molns_exceptions import MolnsUtilException
-from storage_providers import SharedStorage, PersistentStorage
 
 """
   Utility module for MOLNs.

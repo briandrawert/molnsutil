@@ -1,8 +1,9 @@
 import pickle
+
+import constants
 import molns_cloudpickle as cloudpickle
 from molns_exceptions import MolnsUtilException
 from utils import builtin_aggregator_list_append, create_model
-import constants
 
 
 def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_base, number_of_trajectories, mapper,
