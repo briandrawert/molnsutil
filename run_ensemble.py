@@ -1,9 +1,9 @@
 import os
 import pickle
 import uuid
-
+import sys
 import constants
-import molns_cloudpickle as cloudpickle
+import molns_cloudpickle
 from molns_exceptions import MolnsUtilException
 from storage_providers import PersistentStorage, LocalStorage, SharedStorage
 
@@ -31,14 +31,20 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         raise MolnsUtilException("Unknown storage type '{0}'".format(storage_mode))
 
     # Create the model
+    notes = ""
     try:
-        model_class_cls = cloudpickle.loads(model_class)
+        notes = "hello"
+        notes += str(molns_cloudpickle)
+        import molnsutil
+        notes += str(molnsutil)
+        sys.modules['molns_cloudpickle'] = molns_cloudpickle
+        model_class_cls = molns_cloudpickle.loads(model_class)
         if parameters is not None:
             model = model_class_cls(**parameters)
         else:
             model = model_class_cls()
     except Exception as e:
-        notes = "Error instantiation the model class, caught {0}: {1}\n".format(type(e), e)
+        notes += "Error caught instantiating the model class {0}\n".format(str(e))
         notes += "dir={0}\n".format(dir())
         raise MolnsUtilException(notes)
 
@@ -77,7 +83,7 @@ if __name__ == "__main__":
         result = run_ensemble(model_cls, params, param_set_id_, seed, num_of_trajectories, storage_mode=storage_mode,
                               local_storage_path=os.path.dirname(os.path.abspath(__file__)))
         with open(constants.job_output_file_name, "wb") as output:
-            cloudpickle.dump(result, output)
+            molns_cloudpickle.dump(result, output)
     except MolnsUtilException as errors:
         with open(constants.job_error_file_name, "wb") as error:
             error.write(str(errors))
