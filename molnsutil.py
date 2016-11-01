@@ -641,8 +641,9 @@ class DistributedEnsemble:
                                                  .format(store_realizations_dir))
                     import shutil
                     for f in os.listdir(realizations_storage_directory):
-                        shutil.copy(os.path.abspath(f), store_realizations_dir)
-                        os.remove(os.path.abspath(f))
+                        f_abs = os.path.join(realizations_storage_directory, f)
+                        shutil.copy(f_abs, store_realizations_dir)
+                        os.remove(f_abs)
                     os.rmdir(realizations_storage_directory)
                     realizations_storage_directory = store_realizations_dir
 
