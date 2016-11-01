@@ -428,14 +428,11 @@ class DistributedEnsemble:
         return {'wall_time': results.wall_time, 'serial_time': results.serial_time}
 
     def _qsub_generate_and_store_realizations(self, pparams, param_set_ids, seed_list, pchunks, divid=None,
-                                              progress_bar=False, storage_dir=None):
+                                              progress_bar=False):
         counter = 0
         random_string = str(uuid.uuid4())
 
-        if storage_dir is None:
-            base_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "realizations_" + random_string)
-        else:
-            base_dir = storage_dir
+        base_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "realizations_" + random_string)
 
         job_name_prefix = "ps_job_" + random_string[:8] + "_"
         dirs = []
@@ -498,7 +495,7 @@ class DistributedEnsemble:
                     shutil.copyfile(os.path.join(directory, f), os.path.join(base_dir, f))
                     break
 
-    def add_realizations(self, number_of_trajectories=None, chunk_size=None, progress_bar=True, storage_dir=None):
+    def add_realizations(self, number_of_trajectories=None, chunk_size=None, progress_bar=True):
         """ Add a number of realizations to the ensemble. """
 
         if number_of_trajectories is None:
@@ -542,7 +539,7 @@ class DistributedEnsemble:
                                                                  pchunks, divid, progress_bar=progress_bar)
         else:
             return self._qsub_generate_and_store_realizations(pparams, param_set_ids, seed_list, pchunks, divid,
-                                                              progress_bar=progress_bar, storage_dir=storage_dir)
+                                                              progress_bar=progress_bar)
 
     def _update_client(self, client=None):
         if client is None:
@@ -605,7 +602,7 @@ class DistributedEnsemble:
     # MAIN FUNCTION
     # --------------------------
     def run(self, mapper, aggregator=None, reducer=None, number_of_trajectories=None, chunk_size=None,
-            verbose=True, progress_bar=True, store_realizations=True, cache_results=False, storage_dir=None):
+            verbose=True, progress_bar=True, store_realizations=True, cache_results=False, store_realizations_dir=None):
         """ Main entry point """
 
         self.log.verbose = verbose
@@ -629,7 +626,7 @@ class DistributedEnsemble:
             # Run simulations
             if self.number_of_trajectories < number_of_trajectories:
                 generated_realizations = self.add_realizations(number_of_trajectories - self.number_of_trajectories,
-                                                               chunk_size=chunk_size, storage_dir=storage_dir)
+                                                               chunk_size=chunk_size)
 
             if self.qsub is False:
                 mapped_results = self._ipython_map_aggregate_stored_realizations(mapper=mapper, divid=divid,
@@ -637,11 +634,21 @@ class DistributedEnsemble:
                                                                                  cache_results=cache_results,
                                                                                  chunk_size=chunk_size)
             else:
+                realizations_storage_directory = generated_realizations['realizations_directory']
+                if store_realizations_dir is not None:
+                    if not os.access(store_realizations_dir, os.W_OK):
+                        raise MolnsUtilException("Cannot access provided storage directory: {0}"
+                                                 .format(store_realizations_dir))
+                    import shutil
+                    for f in os.listdir(realizations_storage_directory):
+                        shutil.move(f, store_realizations_dir)
+                    os.rmdir(realizations_storage_directory)
+                    realizations_storage_directory = store_realizations_dir
+
                 mapped_results = self._qsub_map_aggregate_stored_realizations(mapper=mapper, aggregator=aggregator,
                                                                               chunk_size=chunk_size,
                                                                               realizations_storage_directory=
-                                                                              generated_realizations[
-                                                                                  'realizations_directory'])
+                                                                              realizations_storage_directory)
         else:
             if not self.qsub:
                 mapped_results = self._ipython_run_ensemble_map_aggregate(mapper=mapper, aggregator=aggregator,
