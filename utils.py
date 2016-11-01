@@ -134,7 +134,8 @@ def get_unpickled_result(directory):
 class Log:
     def __init__(self, verbose=True):
         self.verbose = verbose
+        self.override = False
 
     def write_log(self, message):
-        if self.verbose:
+        if self.verbose and self.override:
             print message
