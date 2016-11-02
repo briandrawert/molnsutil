@@ -3,12 +3,6 @@ import logging
 import os
 import uuid
 
-import boto
-import boto.ec2
-import swiftclient
-from boto.s3.connection import S3Connection
-from boto.s3.key import Key
-
 import molns_cloudpickle as cloudpickle
 from molns_exceptions import MolnsUtilStorageException
 
@@ -72,6 +66,9 @@ class SharedStorage:
 
 class S3Provider:
     def __init__(self, bucket_name):
+        import boto
+        from boto.s3.connection import S3Connection
+
         s3config = get_s3config()
         self.connection = S3Connection(is_secure=False,
                                        calling_format=boto.s3.connection.OrdinaryCallingFormat(),
@@ -94,6 +91,7 @@ class S3Provider:
         return self.connection.create_bucket(bucket_name)
 
     def put(self, name, data, reduced_redundancy=True):
+        from boto.s3.key import Key
         k = Key(self.bucket)
         if not k:
             raise MolnsUtilStorageException("Could not obtain key in the global store. ")
@@ -107,6 +105,8 @@ class S3Provider:
         return {'status': 'success', 'num_bytes': num_bytes}
 
     def get(self, name, validate=False):
+        import boto
+        from boto.s3.key import Key
         k = Key(self.bucket, validate)
         k.key = name
         try:
@@ -117,6 +117,7 @@ class S3Provider:
 
     def delete(self, name):
         """ Delete an object. """
+        from boto.s3.key import Key
         k = Key(self.bucket)
         k.key = name
         self.bucket.delete_key(k)
@@ -133,6 +134,7 @@ class S3Provider:
 
 class SwiftProvider():
     def __init__(self, bucket_name):
+        import swiftclient
         s3config = get_s3config()
         self.connection = swiftclient.client.Connection(auth_version=2.0, **s3config['credentials'])
         self.set_bucket(bucket_name)
@@ -159,7 +161,8 @@ class SwiftProvider():
         return bucket
 
     def get_all_buckets(self):
-        (response, bucket_list) = ps.provider.connection.get_account()
+
+        (response, bucket_list) = self.connection.get_account()
         return [b['name'] for b in bucket_list]
 
     def put(self, object_name, data):
