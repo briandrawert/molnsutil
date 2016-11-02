@@ -1,8 +1,5 @@
 import copy
 import uuid
-
-from IPython.display import HTML, Javascript, display
-
 import molns_cloudpickle as cloudpickle
 from molns_exceptions import MolnsUtilException
 from storage_providers import SharedStorage, PersistentStorage
@@ -88,6 +85,8 @@ def write_file(storage_mode, filename, result):
 
 
 def display_progressbar():
+    from IPython.display import HTML, display
+
     # This should be factored out somehow.
     divid = str(uuid.uuid4())
     pb = HTML("""<div style="border: 1px solid black; width:500px">
@@ -97,6 +96,7 @@ def display_progressbar():
 
 
 def update_progressbar(divid, i, length):
+    from IPython.display import display, Javascript
     if divid is None:
         return
     display(Javascript("$('div#%s').width('%f%%')" % (divid, 100.0 * (i + 1) / length)))
