@@ -602,7 +602,7 @@ class DistributedEnsemble:
     # MAIN FUNCTION
     # --------------------------
     def run(self, mapper, aggregator=None, reducer=None, number_of_trajectories=None, chunk_size=None,
-            verbose=True, progress_bar=True, store_realizations=True, cache_results=False, store_realizations_dir=None):
+            verbose=True, progress_bar=False, store_realizations=True, cache_results=False, store_realizations_dir=None):
         """ Main entry point """
 
         self.log.verbose = verbose
