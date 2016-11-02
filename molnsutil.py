@@ -4,7 +4,6 @@ import math
 import os
 import pickle
 import uuid
-import IPython.parallel
 import constants
 import molns_cloudpickle as cloudpickle
 
@@ -543,6 +542,7 @@ class DistributedEnsemble:
 
     def _update_client(self, client=None):
         if client is None:
+            import IPython.parallel
             self.c = IPython.parallel.Client()
         else:
             self.c = client
@@ -591,7 +591,7 @@ class DistributedEnsemble:
                     pass
 
     def __del__(self):
-        """ Deconstructor. """
+        """ Destructor. """
         try:
             self.delete_realizations()
         except Exception as e:
@@ -602,7 +602,8 @@ class DistributedEnsemble:
     # MAIN FUNCTION
     # --------------------------
     def run(self, mapper, aggregator=None, reducer=None, number_of_trajectories=None, chunk_size=None,
-            verbose=True, progress_bar=False, store_realizations=True, cache_results=False, store_realizations_dir=None):
+            verbose=True, progress_bar=False, store_realizations=True, cache_results=False,
+            store_realizations_dir=None):
         """ Main entry point """
 
         self.log.verbose = verbose
