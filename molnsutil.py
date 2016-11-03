@@ -848,12 +848,6 @@ class ParameterSweep(DistributedEnsemble):
         else:
             raise MolnsUtilException("parameters must be a dict.")
 
-            # I commented this out because this initialization is also happening in the parent class.
-            # if qsub is False:
-            #     # Set the Ipython.parallel client
-            #     self.num_engines = num_engines
-            #     self._update_client()
-
     def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
         if self.qsub:
@@ -868,7 +862,50 @@ class ParameterSweep(DistributedEnsemble):
         if self.cluster_execution is False:
             parameter_sweep_run_reducer(self.parameters, kwargs['reducer'], kwargs['mapped_results'])
         else:
-            raise NotImplementedError("Invoke docker to execute parameter_sweep_run_reducer in qsub image.")
+            import shutil
+            from subprocess import Popen
+            random_string = str(uuid.uuid4())
+            temp_job_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "temp_" + random_string[:8])
+
+            unpickled_inp = dict(mapped_results=kwargs['mapped_results'])
+
+            input_file_path = os.path.join(temp_job_directory, constants.reduce_input_file_name)
+            # Write input file
+            with open(input_file_path, "wb") as input_file:
+                cloudpickle.dump(unpickled_inp, input_file)
+
+            # Copy input files to working directory.
+            shutil.copyfile(self.pickled_cluster_input_file, os.path.join(temp_job_directory,
+                                                                          constants.pickled_cluster_input_file))
+            shutil.copyfile(input_file_path, os.path.join(temp_job_directory, constants.job_input_file_name))
+
+            # Copy library scripts to working directory.
+            shutil.copyfile(constants.parameter_sweep_run_reducer_shell_script,
+                            os.path.join(temp_job_directory, os.path.basename(
+                                constants.parameter_sweep_run_reducer_shell_script)))
+            shutil.copyfile(constants.parameter_sweep_run_reducer_pyfile,
+                            os.path.join(temp_job_directory, os.path.basename(
+                                constants.parameter_sweep_run_reducer_pyfile)))
+
+            # Invoke parameter_sweep_run_reducer.
+            Popen(["bash", os.path.join(temp_job_directory,
+                                        os.path.basename(constants.parameter_sweep_run_reducer_shell_script))],
+                  shell=False)
+
+            failed_job = self._wait_for_all_results_to_return([temp_job_directory])
+
+            if len(failed_job) > 0:
+                raise MolnsUtilException("Failed to reduce results. Job directory {0} will not be deleted."
+                                         .format(temp_job_directory))
+
+            with open(os.path.join(temp_job_directory, constants.job_output_file_name), "rb") as of:
+                result = pickle.load(of)
+
+            # Remove job directory and container.
+            clean_up([temp_job_directory], [temp_job_directory])
+
+            return result
+
 
 if __name__ == '__main__':
     ga = PersistentStorage()

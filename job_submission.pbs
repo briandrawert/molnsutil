@@ -27,7 +27,7 @@ runprogram()
 {
   curr_dir=`pwd`
   parent_dir=`dirname ${curr_dir}`
-  molnsutil_dir=`dirname ${parent_dir}`
+  molnsutil_dir=${parent_dir}"/molnsutil"
 
   COMMAND="sudo docker run -e PYTHONPATH=/stochss-master/app/lib -e STOCHKIT_HOME=/stochss-master/StochKit --volume ${curr_dir}:/stochss-master/app/lib/w_dir/ --volume ${molnsutil_dir}:/stochss-master/app/lib/molnsutil/ -w /stochss-master/app/lib/w_dir/ --name ${PBS_JOBNAME} aviralcse/stochss_qsub python job.py"
 
