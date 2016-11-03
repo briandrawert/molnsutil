@@ -601,26 +601,54 @@ class DistributedEnsemble:
 
     # MAIN FUNCTION
     # --------------------------
-    def run(self, mapper, aggregator=None, reducer=None, number_of_trajectories=None, chunk_size=None,
-            verbose=True, progress_bar=False, store_realizations=True, cache_results=False,
-            store_realizations_dir=None):
+    def run(self, **kwargs):
         """ Main entry point """
 
-        self.log.verbose = verbose
+        self.log.verbose = False
+        cluster_execution = True
+        divid = None
 
-        if reducer is None:
-            reducer = builtin_reducer_default
+        if not kwargs['pickled_cluster_input_file']:
+            cluster_execution = False
+            if not kwargs['reducer']:
+                reducer = builtin_reducer_default
+            else:
+                reducer = kwargs['reducer']
 
-        if chunk_size is None:
-            chunk_size = self._determine_chunk_size(self.number_of_trajectories)
+            if not kwargs['verbose']:
+                self.log.verbose = False
+            else:
+                self.log.verbose = kwargs['verbose']
 
-        # Do we have enough trajectories yet?
-        if number_of_trajectories is None and self.number_of_trajectories == 0:
+            if not kwargs['progress_bar']:
+                pass
+            elif kwargs['progress_bar'] is True:
+                divid = display_progressbar()
+
+            if not kwargs['cache_results']:
+                cache_results = False
+            else:
+                cache_results = kwargs['cache_results']
+
+        if not kwargs['number_of_trajectories'] is None and self.number_of_trajectories == 0:
             raise MolnsUtilException("number_of_trajectories is zero")
 
-        divid = None
-        if progress_bar:
-            divid = display_progressbar()
+        number_of_trajectories = kwargs['number_of_trajectories']
+
+        if not kwargs['store_realizations']:
+            store_realizations = False
+        else:
+            store_realizations = True
+
+        if not kwargs['chunk_size']:
+            chunk_size = self._determine_chunk_size(self.number_of_trajectories)
+        else:
+            chunk_size = kwargs['chunk_size']
+
+        if not kwargs['store_realizations_dir']:
+            store_realizations_dir = None
+        else:
+            store_realizations_dir = kwargs['store_realizations_dir']
 
         if store_realizations:
             generated_realizations = None
@@ -630,8 +658,9 @@ class DistributedEnsemble:
                                                                chunk_size=chunk_size)
 
             if self.qsub is False:
-                mapped_results = self._ipython_map_aggregate_stored_realizations(mapper=mapper, divid=divid,
-                                                                                 aggregator=aggregator,
+                assert cluster_execution is False
+                mapped_results = self._ipython_map_aggregate_stored_realizations(mapper=kwargs['mapper'], divid=divid,
+                                                                                 aggregator=kwargs['aggregator'],
                                                                                  cache_results=cache_results,
                                                                                  chunk_size=chunk_size)
             else:
@@ -648,28 +677,41 @@ class DistributedEnsemble:
                     os.rmdir(realizations_storage_directory)
                     realizations_storage_directory = store_realizations_dir
 
-                mapped_results = self._qsub_map_aggregate_stored_realizations(mapper=mapper, aggregator=aggregator,
-                                                                              chunk_size=chunk_size,
-                                                                              realizations_storage_directory=
-                                                                              realizations_storage_directory)
+                if cluster_execution is False:
+                    mapped_results = self._qsub_map_aggregate_stored_realizations(mapper=kwargs['mapper'],
+                                                                                  aggregator=kwargs['aggregator'],
+                                                                                  chunk_size=chunk_size,
+                                                                                  realizations_storage_directory=
+                                                                                  realizations_storage_directory)
+                else:
+                    raise MolnsUtilException("Not implemented yet")
         else:
             if not self.qsub:
-                mapped_results = self._ipython_run_ensemble_map_aggregate(mapper=mapper, aggregator=aggregator,
+                assert cluster_execution is False
+                mapped_results = self._ipython_run_ensemble_map_aggregate(mapper=kwargs['mapper'],
+                                                                          aggregator=kwargs['aggregator'],
                                                                           chunk_size=chunk_size,
                                                                           number_of_trajectories=number_of_trajectories,
                                                                           divid=divid)
 
             else:
-                mapped_results = self._qsub_run_ensemble_map_aggregate(mapper=mapper, divid=divid,
-                                                                       number_of_trajectories=number_of_trajectories,
-                                                                       chunk_size=chunk_size, aggregator=aggregator)
+                if cluster_execution is False:
+                    mapped_results = self._qsub_run_ensemble_map_aggregate(mapper=kwargs['mapper'], divid=divid,
+                                                                           number_of_trajectories=number_of_trajectories,
+                                                                           chunk_size=chunk_size,
+                                                                           aggregator=kwargs['aggregator'])
+                else:
+                    raise MolnsUtilException("Not implemented yet")
 
         self.log.write_log("Running reducer on mapped and aggregated results (size={0})".format(len(mapped_results)))
 
         # Run reducer
-        return self.run_reducer(reducer, mapped_results)
+        if cluster_execution is False:
+            return self.run_reducer(reducer, mapped_results)
+        else:
+            raise MolnsUtilException("Not implemented yet")
 
-        # -------- Convenience functions with builtin mappers/reducers  ------------------
+            # -------- Convenience functions with builtin mappers/reducers  ------------------
 
     def mean_variance(self, mapper=None, number_of_trajectories=None, chunk_size=None, verbose=True,
                       store_realizations=True, cache_results=False):
@@ -778,6 +820,7 @@ class ParameterSweep(DistributedEnsemble):
 
 class ParameterSweepResult:
     """TODO"""
+
     def __init__(self, result, parameters):
         self.result = result
         self.parameters = parameters
