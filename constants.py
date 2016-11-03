@@ -17,6 +17,7 @@ utils_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "utils.py
 molnstutil_init_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "__init__.py")
 constants_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "constants.py")
 job_input_file_name = "input"
+pickled_cluster_input_file = "pickled-cluster-input-file"
 job_output_file_name = "output"
 job_complete_file_name = "complete"
 job_error_file_name = "error"

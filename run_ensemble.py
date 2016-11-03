@@ -72,12 +72,18 @@ if __name__ == "__main__":
     with open(constants.job_input_file_name, "rb") as inp:
         unpickled_list = pickle.load(inp)
 
-    num_of_trajectories = unpickled_list[0]
-    seed = unpickled_list[1]
-    model_cls = unpickled_list[2]
-    params = unpickled_list[3]
-    param_set_id_ = unpickled_list[4]
-    storage_mode = unpickled_list[5]
+    num_of_trajectories = unpickled_list['pchunk']
+    seed = unpickled_list['seed']
+    params = unpickled_list['pset']
+    param_set_id_ = unpickled_list['pndx']
+    storage_mode = unpickled_list['storage_mode']
+
+    if not unpickled_list.get('model_class', False):
+        with open(constants.pickled_cluster_input_file, "rb") as inp:
+            unpickled_cluster_input = pickle.load(inp)
+            model_cls = unpickled_cluster_input['model_class']
+    else:
+        model_cls = unpickled_list['model_class']
 
     try:
         result = run_ensemble(model_cls, params, param_set_id_, seed, num_of_trajectories, storage_mode=storage_mode,

@@ -1,5 +1,4 @@
 import pickle
-
 import constants
 import molns_cloudpickle as cloudpickle
 from molns_exceptions import MolnsUtilException, MolnsUtilStorageException
@@ -83,12 +82,19 @@ if __name__ == "__main__":
     with open(constants.job_input_file_name, "rb") as inp:
         unpickled_list = pickle.load(inp)
 
-    results_ = unpickled_list[0]
-    param_set_id_ = unpickled_list[1]
-    mapper_fn = unpickled_list[2]
-    aggregator_fn = unpickled_list[3]
-    cache_results_ = unpickled_list[4]
+    results_ = unpickled_list['result']
+    param_set_id_ = unpickled_list['pndx']
+    cache_results_ = unpickled_list['cache_results']
     local_storage_directory_ = os.path.dirname(os.path.abspath(__file__))
+
+    if not unpickled_list.get('mapper', False):
+        with open(constants.pickled_cluster_input_file, "rb") as inp:
+            unpickled_cluster_input = pickle.load(inp)
+            mapper_fn = unpickled_cluster_input['mapper']
+            aggregator_fn = unpickled_cluster_input['aggregator']
+    else:
+        mapper_fn = unpickled_list['mapper']
+        aggregator_fn = unpickled_list['aggregator']
 
     try:
         result = map_and_aggregate(results_, param_set_id_, mapper_fn, aggregator_fn, cache_results_,

@@ -6,7 +6,7 @@ import pickle
 import uuid
 import constants
 import molns_cloudpickle as cloudpickle
-
+from parameter_sweep_run_reducer import parameter_sweep_run_reducer
 from map_and_aggregate import map_and_aggregate
 from molns_exceptions import MolnsUtilException
 from run_ensemble import run_ensemble
@@ -54,10 +54,25 @@ logging.basicConfig(filename="boto.log", level=logging.DEBUG)
 class DistributedEnsemble:
     """ A class to provide an API for execution of a distributed ensemble. """
 
-    def __init__(self, model_class=None, parameters=None, qsub=False, client=None, num_engines=None, storage_mode=None):
+    def __init__(self, model_class=None, parameters=None, qsub=False, client=None, num_engines=None, storage_mode=None,
+                 pickled_cluster_input_file=None):
         """ Constructor """
+
         self.my_class_name = 'DistributedEnsemble'
-        self.model_class = cloudpickle.dumps(model_class)
+
+        if model_class is None and pickled_cluster_input_file is None:
+            raise MolnsUtilException("Invalid configuration. Either provide a model class object or its pickled file.")
+
+        if model_class is not None and pickled_cluster_input_file is not None:
+            raise MolnsUtilException("Invalid configuration. Both a model class and its pickled file are provided.")
+
+        if model_class is not None:
+            self.cluster_execution = False
+            self.model_class = cloudpickle.dumps(model_class)
+        else:
+            self.cluster_execution = True
+            self.pickled_cluster_input_file = pickled_cluster_input_file
+
         self.parameters = [parameters]
         self.number_of_trajectories = 0
         self.seed_base = generate_seed_base()
@@ -106,7 +121,7 @@ class DistributedEnsemble:
                 (presult_list is not None and not isinstance(presult_list, list)) or \
                 (presult_list is not None and chunk_size is None):
             raise MolnsUtilException("Unexpected arguments. Require pparams, param_set_ids (and presult_list) to be "
-                                     "of type list. chunk_size cannot be None is presult_list is not None.")
+                                     "of type list. chunk_size cannot be None if presult_list is not None.")
 
         for ide, param in enumerate(self.parameters):
             param_set_ids.extend([ide] * num_chunks)
@@ -150,8 +165,9 @@ class DistributedEnsemble:
 
         return mapped_results
 
-    def _qsub_map_aggregate_stored_realizations(self, mapper, realizations_storage_directory, aggregator=None,
-                                                chunk_size=None, divid=None):
+    def _qsub_map_aggregate_stored_realizations(self, **kwargs):
+        chunk_size = kwargs['chunk_size']
+        realizations_storage_directory = kwargs['realizations_storage_directory']
 
         self.log.write_log("Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})"
                            .format(self.number_of_trajectories * len(self.parameters), chunk_size))
@@ -166,7 +182,7 @@ class DistributedEnsemble:
         dirs = []
         containers = []
 
-        # chunks per parameter
+        # chunks per parameter TODO is number_of_trajectories correct here?
         num_chunks = int(math.ceil(self.number_of_trajectories / float(chunk_size)))
         chunks = [chunk_size] * (num_chunks - 1)
         chunks.append(self.number_of_trajectories - chunk_size * (num_chunks - 1))
@@ -191,14 +207,19 @@ class DistributedEnsemble:
                 shutil.copyfile(os.path.join(realizations_storage_directory, filename),
                                 os.path.join(temp_job_directory, filename))
 
-            unpickled_list = [result, pndx, mapper, aggregator, False]
+            if self.cluster_execution is False:
+                unpickled_list = dict(result=result, pndx=pndx, mapper=kwargs['mapper'],
+                                      aggregator=kwargs['aggregator'], cache_results=False)
+            else:
+                unpickled_list = dict(result=result, pndx=pndx, cache_results=False,
+                                      pickled_cluster_input_file=kwargs['pickled_cluster_input_file'])
 
             self._submit_qsub_job(constants.map_and_aggregate_job_file, job_name, unpickled_list, containers, dirs,
                                   temp_job_directory)
 
             counter += 1
 
-        keep_dirs = self._wait_for_all_results_to_return(wait_for_dirs=dirs, divid=divid)
+        keep_dirs = self._wait_for_all_results_to_return(wait_for_dirs=dirs, divid=kwargs.get('divid', False))
 
         remove_dirs = [directory for directory in dirs if directory not in keep_dirs]
         mapped_results = {}
@@ -217,6 +238,7 @@ class DistributedEnsemble:
 
     def _ipython_run_ensemble_map_aggregate(self, mapper, number_of_trajectories=None, chunk_size=None, divid=None,
                                             aggregator=None):
+
         # If we don't store the realizations (or use the stored ones)
         self.log.write_log(
             "Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})".format(
@@ -294,9 +316,14 @@ class DistributedEnsemble:
         import shutil
         from subprocess import Popen
 
+        pickled_cluster_input_file = job_input['pickled_cluster_input_file']
+
         # write input file for qsub job.
         with open(os.path.join(temp_job_directory, constants.job_input_file_name), "wb") as input_file:
             cloudpickle.dump(job_input, input_file)
+        if self.cluster_execution is True:
+            shutil.copyfile(pickled_cluster_input_file, os.path.join(temp_job_directory,
+                                                                     constants.pickled_cluster_input_file))
 
         # write job program file.
         shutil.copyfile(job_program_file, os.path.join(temp_job_directory, constants.qsub_job_name))
@@ -344,20 +371,24 @@ class DistributedEnsemble:
             if divid is not None:
                 update_progressbar(divid, i, len(results))
 
-    def _qsub_run_ensemble_map_aggregate(self, mapper, aggregator=None, number_of_trajectories=None, chunk_size=None,
-                                         divid=None, progress_bar=False):
+    def _qsub_run_ensemble_map_aggregate(self, **kwargs):
         counter = 0
         random_string = str(uuid.uuid4())
         base_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "temp_" + random_string)
         job_name_prefix = "ps_job_" + random_string[:8] + "_"
         dirs = []
         containers = []
+        number_of_trajectories = kwargs['number_of_trajectories']
+        chunk_size = kwargs['chunk_size']
 
         self.log.write_log("Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})"
                            .format(number_of_trajectories, chunk_size))
 
-        if aggregator is None:
-            aggregator = builtin_aggregator_list_append
+        if self.cluster_execution is False:
+            if kwargs['aggregator'] is None:
+                aggregator = builtin_aggregator_list_append
+            else:
+                aggregator = kwargs['aggregator']
 
         if not os.path.exists(base_dir):
             os.makedirs(base_dir)
@@ -369,8 +400,14 @@ class DistributedEnsemble:
         self._set_pparams_paramsetids_presultlist(num_chunks=num_chunks, pparams=pparams, param_set_ids=param_set_ids)
 
         for pndx, pset, seed in zip(param_set_ids, pparams, seed_list):
+            if self.cluster_execution is False:
+                unpickled_list = dict(chunk_size=chunk_size, seed=seed, model_cls=self.model_class,
+                                      mapper=kwargs['mapper'], aggregator=aggregator, pset=pset, pndx=pndx)
+            else:
+                unpickled_list = dict(chunk_size=chunk_size, seed=seed,
+                                      pickled_cluster_input_file=kwargs['pickled_cluster_input_file'], pset=pset,
+                                      pndx=pndx)
 
-            unpickled_list = [chunk_size, seed, self.model_class, mapper, aggregator, pset, pndx]
             job_name = job_name_prefix + str(counter)
 
             # create temp directory for this job.
@@ -384,7 +421,9 @@ class DistributedEnsemble:
 
             counter += 1
 
-        keep_dirs = self._wait_for_all_results_to_return(wait_for_dirs=dirs, progress_bar=progress_bar, divid=divid)
+        keep_dirs = self._wait_for_all_results_to_return(wait_for_dirs=dirs,
+                                                         progress_bar=kwargs.get('progress_bar', False),
+                                                         divid=kwargs.get('divid', None))
 
         # Process only the results successfully computed into a format compatible with self.run_reducer.
         remove_dirs = [directory for directory in dirs if directory not in keep_dirs]
@@ -445,7 +484,15 @@ class DistributedEnsemble:
             raise MolnsUtilException("Storage mode must be local while using qsub.")
 
         for pndx, pset, seed, pchunk in zip(param_set_ids, pparams, seed_list, pchunks):
-            unpickled_list = [pchunk, seed, self.model_class, pset, pndx, constants.local_storage]
+            if self.cluster_execution is True:
+                unpickled_list = dict(pchunk=pchunk, seed=seed,
+                                      pickled_cluster_input_file=self.pickled_cluster_input_file,
+                                      pset=pset, pndx=pndx, storage_mode=constants.local_storage)
+            else:
+                unpickled_list = dict(pchunk=pchunk, seed=seed,
+                                      model_class=self.model_class, pset=pset, pndx=pndx,
+                                      storage_mode=constants.local_storage)
+
             job_name = job_name_prefix + str(counter)
 
             # create temp directory for this job.
@@ -474,7 +521,7 @@ class DistributedEnsemble:
         self.log.write_log("Cleaning up..")
 
         # Arrange for generated files to be available in a know location - base_dir.
-        DistributedEnsemble._post_process(remove_dirs, base_dir)
+        DistributedEnsemble.__post_process_generated_ensemble(remove_dirs, base_dir)
 
         # Delete job containers and directories. Preserve base_dir as it contains computed realizations.
         clean_up(dirs_to_delete=remove_dirs, containers_to_delete=containers)
@@ -482,7 +529,7 @@ class DistributedEnsemble:
         return {'wall_time': "unknown", 'serial_time': "unknown", 'realizations_directory': base_dir}
 
     @staticmethod
-    def _post_process(directories, base_dir):
+    def __post_process_generated_ensemble(directories, base_dir):
         import re
         import shutil
         exp = re.compile(r'[0-9a-f-]{36}')
@@ -605,11 +652,9 @@ class DistributedEnsemble:
         """ Main entry point """
 
         self.log.verbose = False
-        cluster_execution = True
         divid = None
 
-        if not kwargs.get('pickled_cluster_input_file', False):
-            cluster_execution = False
+        if self.cluster_execution is False:
             if not kwargs.get('reducer', False):
                 reducer = builtin_reducer_default
             else:
@@ -635,7 +680,7 @@ class DistributedEnsemble:
 
         number_of_trajectories = kwargs['number_of_trajectories']
         if number_of_trajectories is None:
-            raise MolnsUtilException("Invalid number of trajectories.")
+            raise MolnsUtilException("Number of trajectories provided is None.")
 
         if not kwargs.get('store_realizations', False):
             store_realizations = False
@@ -660,7 +705,6 @@ class DistributedEnsemble:
                                                                chunk_size=chunk_size)
 
             if self.qsub is False:
-                assert cluster_execution is False
                 mapped_results = self._ipython_map_aggregate_stored_realizations(mapper=kwargs['mapper'], divid=divid,
                                                                                  aggregator=kwargs['aggregator'],
                                                                                  cache_results=cache_results,
@@ -679,17 +723,20 @@ class DistributedEnsemble:
                     os.rmdir(realizations_storage_directory)
                     realizations_storage_directory = store_realizations_dir
 
-                if cluster_execution is False:
+                if self.cluster_execution is False:
                     mapped_results = self._qsub_map_aggregate_stored_realizations(mapper=kwargs['mapper'],
                                                                                   aggregator=kwargs['aggregator'],
                                                                                   chunk_size=chunk_size,
                                                                                   realizations_storage_directory=
                                                                                   realizations_storage_directory)
                 else:
-                    raise MolnsUtilException("Not implemented yet")
+                    mapped_results = self._qsub_map_aggregate_stored_realizations(pickled_cluster_input_file=
+                                                                                  kwargs['pickled_cluster_input_file'],
+                                                                                  chunk_size=chunk_size,
+                                                                                  realizations_storage_directory=
+                                                                                  realizations_storage_directory)
         else:
-            if not self.qsub:
-                assert cluster_execution is False
+            if self.qsub is False:
                 mapped_results = self._ipython_run_ensemble_map_aggregate(mapper=kwargs['mapper'],
                                                                           aggregator=kwargs['aggregator'],
                                                                           chunk_size=chunk_size,
@@ -697,21 +744,24 @@ class DistributedEnsemble:
                                                                           divid=divid)
 
             else:
-                if cluster_execution is False:
+                if self.cluster_execution is False:
                     mapped_results = self._qsub_run_ensemble_map_aggregate(mapper=kwargs['mapper'], divid=divid,
-                                                                           number_of_trajectories=number_of_trajectories,
+                                                                           number_of_trajectories=
+                                                                           number_of_trajectories,
                                                                            chunk_size=chunk_size,
                                                                            aggregator=kwargs['aggregator'])
                 else:
-                    raise MolnsUtilException("Not implemented yet")
+                    mapped_results = self._qsub_run_ensemble_map_aggregate(
+                        pickled_cluster_input_file=kwargs['pickled_cluster_input_file'],
+                        number_of_trajectories=number_of_trajectories, chunk_size=chunk_size)
 
         self.log.write_log("Running reducer on mapped and aggregated results (size={0})".format(len(mapped_results)))
 
         # Run reducer
-        if cluster_execution is False:
-            return self.run_reducer(reducer, mapped_results)
+        if self.cluster_execution is False:
+            return self.run_reducer(reducer=reducer, mapped_results=mapped_results)
         else:
-            raise MolnsUtilException("Not implemented yet")
+            return self.run_reducer(mapped_results=mapped_results)
 
             # -------- Convenience functions with builtin mappers/reducers  ------------------
 
@@ -748,7 +798,8 @@ class DistributedEnsemble:
 class ParameterSweep(DistributedEnsemble):
     """ Making parameter sweeps on distributed compute systems easier. """
 
-    def __init__(self, model_class, parameters, qsub=False, client=None, num_engines=None, storage_mode=None):
+    def __init__(self, model_class=None, parameters=None, qsub=False, client=None, num_engines=None, storage_mode=None,
+                 pickled_cluster_input_file=None):
         """ Constructor.
         Args:
           model_class: a class object of the model for simulation, must be a sub-class of URDMEModel
@@ -758,15 +809,17 @@ class ParameterSweep(DistributedEnsemble):
               e.g.: {'arg1':[1,2,3],'arg2':[1,2,3]}  will produce 9 parameter points.
             If it is a list, where each element of the list is a dict
             """
-
+        assert parameters is not None
         if qsub is True:
-            DistributedEnsemble.__init__(self, model_class, parameters, qsub=True, storage_mode=storage_mode)
+            DistributedEnsemble.__init__(self, model_class, parameters, qsub=True, storage_mode=storage_mode,
+                                         pickled_cluster_input_file=pickled_cluster_input_file)
             if client is not None:
                 self.log.write_log("unexpected parameter \"client\"")
             if num_engines is not None:
                 self.log.write_log("unexpected parameter \"num_engines\"")
 
         else:
+            assert model_class is not None
             DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines, storage_mode=storage_mode)
 
         self.my_class_name = 'ParameterSweep'
@@ -810,34 +863,12 @@ class ParameterSweep(DistributedEnsemble):
             return number_of_trajectories
         return int(max(1, math.ceil(number_of_trajectories * num_params / float(self.num_engines))))
 
-    def run_reducer(self, reducer, mapped_results):
+    def run_reducer(self, **kwargs):
         """ Inside the run() function, apply the reducer to all of the mapped-aggregated result values. """
-        ret = ParameterSweepResultList()
-        for param_set_id, param in enumerate(self.parameters):
-            ret.append(ParameterSweepResult(reducer(mapped_results[param_set_id], parameters=param),
-                                            parameters=param))
-        return ret
-        # --------------------------
-
-
-class ParameterSweepResult:
-    """TODO"""
-
-    def __init__(self, result, parameters):
-        self.result = result
-        self.parameters = parameters
-
-    def __str__(self):
-        return "{0} => {1}".format(self.parameters, self.result)
-
-
-class ParameterSweepResultList(list):
-    def __str__(self):
-        l = []
-        for i in self:
-            l.append(str(i))
-        return "[{0}]".format(", ".join(l))
-
+        if self.cluster_execution is False:
+            parameter_sweep_run_reducer(self.parameters, kwargs['reducer'], kwargs['mapped_results'])
+        else:
+            raise NotImplementedError("Invoke docker to execute parameter_sweep_run_reducer in qsub image.")
 
 if __name__ == '__main__':
     ga = PersistentStorage()
