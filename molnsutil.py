@@ -608,44 +608,46 @@ class DistributedEnsemble:
         cluster_execution = True
         divid = None
 
-        if not kwargs['pickled_cluster_input_file']:
+        if not kwargs.get('pickled_cluster_input_file', False):
             cluster_execution = False
-            if not kwargs['reducer']:
+            if not kwargs.get('reducer', False):
                 reducer = builtin_reducer_default
             else:
                 reducer = kwargs['reducer']
 
-            if not kwargs['verbose']:
+            if not kwargs.get('verbose', False):
                 self.log.verbose = False
             else:
                 self.log.verbose = kwargs['verbose']
 
-            if not kwargs['progress_bar']:
+            if not kwargs.get('progress_bar', False):
                 pass
             elif kwargs['progress_bar'] is True:
                 divid = display_progressbar()
 
-            if not kwargs['cache_results']:
+            if not kwargs.get('cache_results'):
                 cache_results = False
             else:
                 cache_results = kwargs['cache_results']
 
-        if not kwargs['number_of_trajectories'] is None and self.number_of_trajectories == 0:
+        if not kwargs.get('number_of_trajectories', False) and self.number_of_trajectories == 0:
             raise MolnsUtilException("number_of_trajectories is zero")
 
         number_of_trajectories = kwargs['number_of_trajectories']
+        if number_of_trajectories is None:
+            raise MolnsUtilException("Invalid number of trajectories.")
 
-        if not kwargs['store_realizations']:
+        if not kwargs.get('store_realizations', False):
             store_realizations = False
         else:
             store_realizations = True
 
-        if not kwargs['chunk_size']:
+        if not kwargs.get('chunk_size', False):
             chunk_size = self._determine_chunk_size(self.number_of_trajectories)
         else:
             chunk_size = kwargs['chunk_size']
 
-        if not kwargs['store_realizations_dir']:
+        if not kwargs.get('store_realizations_dir', False):
             store_realizations_dir = None
         else:
             store_realizations_dir = kwargs['store_realizations_dir']
