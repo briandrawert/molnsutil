@@ -888,8 +888,8 @@ class ParameterSweep(DistributedEnsemble):
                                 constants.parameter_sweep_run_reducer_pyfile)))
 
             # Invoke parameter_sweep_run_reducer.
-            subprocess.call([os.path.join(".", temp_job_directory,
-                                          os.path.basename(constants.parameter_sweep_run_reducer_shell_script))])
+            subprocess.Popen(["/bin/bash", os.path.join(temp_job_directory, os.path.basename(
+                constants.parameter_sweep_run_reducer_shell_script))])
 
             failed_job = self._wait_for_all_results_to_return([temp_job_directory])
 
