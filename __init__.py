@@ -511,7 +511,6 @@ class DistributedEnsemble:
             if param_set_id not in self.result_list:
                 self.result_list[param_set_id] = []
             self.result_list[param_set_id].extend(r)
-            update_progressbar(divid, i, len(remove_dirs))
 
         self.log.write_log("Cleaning up..")
 
