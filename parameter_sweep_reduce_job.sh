@@ -13,6 +13,6 @@ run_reducer()
 }
 
 # RUN
-run_reducer
+run_reducer $1
 
 exit
