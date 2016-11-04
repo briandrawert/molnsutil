@@ -901,7 +901,7 @@ class ParameterSweep(DistributedEnsemble):
                 raise MolnsUtilException("Failed to reduce results. Job directory {0} will not be deleted."
                                          .format(temp_job_directory))
 
-            with open(os.path.join(temp_job_directory, constants.job_output_file_name), "rb") as of:
+            with open(os.path.join(temp_job_directory, constants.job_output_file_name), "r") as of:
                 result = of.read(of)
 
             # Remove job directory and container.
