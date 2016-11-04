@@ -902,7 +902,7 @@ class ParameterSweep(DistributedEnsemble):
                                          .format(temp_job_directory))
 
             with open(os.path.join(temp_job_directory, constants.job_output_file_name), "rb") as of:
-                result = pickle.load(of)
+                result = of.read(of)
 
             # Remove job directory and container.
             clean_up([temp_job_directory], [temp_job_directory])
