@@ -868,7 +868,7 @@ class ParameterSweep(DistributedEnsemble):
             import shutil
             from subprocess import Popen
             random_string = str(uuid.uuid4())
-            temp_job_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "temp_" + random_string[:8])
+            temp_job_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "tmpRed_" + random_string)
 
             # Create temp_job_directory.
             if not os.path.exists(temp_job_directory):
@@ -900,6 +900,8 @@ class ParameterSweep(DistributedEnsemble):
                   shell=False)
 
             failed_job = self._wait_for_all_results_to_return([temp_job_directory])
+
+            # TODO debug from here
 
             if len(failed_job) > 0:
                 raise MolnsUtilException("Failed to reduce results. Job directory {0} will not be deleted."
