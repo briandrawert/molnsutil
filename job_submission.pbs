@@ -29,7 +29,7 @@ runprogram()
   parent_dir=`dirname ${curr_dir}`
   molnsutil_dir=`dirname ${parent_dir}`
 
-  COMMAND="sudo docker run -e PYTHONPATH=/stochss-master/app/lib -e STOCHKIT_HOME=/stochss-master/StochKit --volume ${curr_dir}:/stochss-master/app/lib/w_dir/ --volume ${molnsutil_dir}:/stochss-master/app/lib/molnsutil/ -w /stochss-master/app/lib/w_dir/ --name ${PBS_JOBNAME} aviralcse/stochss_qsub python job.py"
+  COMMAND="docker run -e PYTHONPATH=/stochss-master/app/lib -e STOCHKIT_HOME=/stochss-master/StochKit --volume ${curr_dir}:/stochss-master/app/lib/w_dir/ --volume ${molnsutil_dir}:/stochss-master/app/lib/molnsutil/ -w /stochss-master/app/lib/w_dir/ --name ${PBS_JOBNAME} aviralcse/stochss_qsub python job.py"
 
   ${COMMAND}
   touch complete
