@@ -1,12 +1,7 @@
 import pickle
-import molnsutil.constants as constants
-import molnsutil.molns_cloudpickle as cloudpickle
-from molnsutil.molns_exceptions import MolnsUtilException, MolnsUtilStorageException
-from molnsutil.storage_providers import PersistentStorage, LocalStorage, SharedStorage
-from molnsutil.utils import builtin_aggregator_list_append
 
 
-def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_results=False,
+def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_results=False, cluster_import=False,
                       local_storage_directory=None):
     """ Reduces a list of results by applying the map function 'mapper'.
         When this function is applied on an engine, it will first
@@ -19,6 +14,13 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
         postprocessing jobs may run faster.
 
         """
+
+    if cluster_import is True:
+        pass
+    else:
+        from molns_exceptions import MolnsUtilException, MolnsUtilStorageException
+        from storage_providers import PersistentStorage, LocalStorage, SharedStorage
+        from utils import builtin_aggregator_list_append
 
     # If local_storage_directory is provided, then use ONLY that directory.
     if local_storage_directory is not None:
@@ -78,27 +80,34 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
 
 
 if __name__ == "__main__":
-    import os
-    with open(constants.job_input_file_name, "rb") as inp:
-        unpickled_list = pickle.load(inp)
-
-    results_ = unpickled_list['result']
-    param_set_id_ = unpickled_list['pndx']
-    cache_results_ = unpickled_list['cache_results']
-    local_storage_directory_ = os.path.dirname(os.path.abspath(__file__))
-
-    if not unpickled_list.get('mapper', False):
-        with open(constants.pickled_cluster_input_file, "rb") as inp:
-            unpickled_cluster_input = pickle.load(inp)
-            mapper_fn = unpickled_cluster_input['mapper']
-            aggregator_fn = unpickled_cluster_input['aggregator']
-    else:
-        mapper_fn = unpickled_list['mapper']
-        aggregator_fn = unpickled_list['aggregator']
-
     try:
-        result = map_and_aggregate(results_, param_set_id_, mapper_fn, aggregator_fn, cache_results_,
-                                   local_storage_directory_)
+        import os
+        import molnsutil.constants as constants
+        import molnsutil.molns_cloudpickle as cloudpickle
+        from molnsutil.molns_exceptions import MolnsUtilException, MolnsUtilStorageException
+        from molnsutil.storage_providers import PersistentStorage, LocalStorage, SharedStorage
+        from molnsutil.utils import builtin_aggregator_list_append
+
+        with open(constants.job_input_file_name, "rb") as inp:
+            unpickled_list = pickle.load(inp)
+
+        results_ = unpickled_list['result']
+        param_set_id_ = unpickled_list['pndx']
+        cache_results_ = unpickled_list['cache_results']
+        local_storage_directory_ = os.path.dirname(os.path.abspath(__file__))
+
+        if not unpickled_list.get('mapper', False):
+            with open(constants.pickled_cluster_input_file, "rb") as inp:
+                unpickled_cluster_input = pickle.load(inp)
+                mapper_fn = unpickled_cluster_input['mapper']
+                aggregator_fn = unpickled_cluster_input['aggregator']
+        else:
+            mapper_fn = unpickled_list['mapper']
+            aggregator_fn = unpickled_list['aggregator']
+
+        result = map_and_aggregate(results=results_, param_set_id=param_set_id_, mapper=mapper_fn,
+                                   aggregator=aggregator_fn, cache_results=cache_results_, cluster_import=True,
+                                   local_storage_directory=local_storage_directory_)
         with open(constants.job_output_file_name, "wb") as output:
             cloudpickle.dump(result, output)
     except MolnsUtilException as errors:
