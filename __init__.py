@@ -286,10 +286,6 @@ class DistributedEnsemble:
                 output_file = os.path.join(directory, constants.job_output_file_name)
                 completed_file = os.path.join(directory, constants.job_complete_file_name)
 
-                # DEBUG
-                with open(os.path.join(directory, "awaiting result DEBUG"), "wb") as input_file:
-                    input_file.write("{0}\n".format(directory))
-
                 if os.path.exists(output_file):
                     dirs.remove(directory)
                     successful_jobs += 1
@@ -311,7 +307,7 @@ class DistributedEnsemble:
 
         if completed_jobs > successful_jobs:
             self.log.write_log(
-                "{0} job(s) did not complete successfully. Their working directories will NOT be deleted."
+                "{0} job(s) did not complete successfully. Their working directories will not be deleted."
                     .format(completed_jobs - successful_jobs))
 
         return keep_dirs
@@ -896,18 +892,10 @@ class ParameterSweep(DistributedEnsemble):
             container_name = os.path.basename(temp_job_directory)
 
             # Invoke parameter_sweep_run_reducer.
-            ret_code = subprocess.check_call("bash {0} {1} {2}".format(reduce_script_file, container_name,
+            subprocess.check_call("bash {0} {1} {2}".format(reduce_script_file, container_name,
                                                                        temp_job_directory), shell=True)
 
-            # DEBUG
-            with open(os.path.join(temp_job_directory, "after call DEBUG"), "wb") as input_file:
-                input_file.write("{0}\n{1}\n{2}".format(temp_job_directory, container_name, ret_code))
-
             failed_job = self._wait_for_all_results_to_return([temp_job_directory])
-
-            # DEBUG
-            with open(os.path.join(temp_job_directory, "after failed_job DEBUG"), "wb") as input_file:
-                input_file.write("{0}\n{1}".format(temp_job_directory, container_name))
 
             if len(failed_job) > 0:
                 raise MolnsUtilException("Failed to reduce results. Job directory {0} will not be deleted."
@@ -916,12 +904,8 @@ class ParameterSweep(DistributedEnsemble):
             with open(os.path.join(temp_job_directory, constants.job_output_file_name), "rb") as of:
                 result = pickle.load(of)
 
-            # DEBUG
-            with open(os.path.join(temp_job_directory, "last DEBUG"), "wb") as input_file:
-                input_file.write("{0}\n{1}".format(temp_job_directory, container_name))
-
             # Remove job directory and container.
-            #clean_up([temp_job_directory], [temp_job_directory])
+            clean_up([temp_job_directory], [temp_job_directory])
 
             return result
 
