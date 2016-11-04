@@ -891,10 +891,6 @@ class ParameterSweep(DistributedEnsemble):
                 constants.parameter_sweep_run_reducer_shell_script))
             container_name = os.path.basename(temp_job_directory)
 
-            # DEBUG
-            with open(os.path.join(temp_job_directory, "DEBUG"), "wb") as input_file:
-                input_file.write("{0}\n{1}".format(reduce_script_file, container_name))
-
             # Invoke parameter_sweep_run_reducer.
             subprocess.call("bash {0} {1}".format(reduce_script_file, container_name), shell=True)
 
@@ -907,8 +903,12 @@ class ParameterSweep(DistributedEnsemble):
             with open(os.path.join(temp_job_directory, constants.job_output_file_name), "rb") as of:
                 result = pickle.load(of)
 
+                # DEBUG
+            with open(os.path.join(temp_job_directory, "DEBUG"), "wb") as input_file:
+                input_file.write("{0}\n{1}".format(temp_job_directory, container_name))
+
             # Remove job directory and container.
-            clean_up([temp_job_directory], [temp_job_directory])
+            #clean_up([temp_job_directory], [temp_job_directory])
 
             return result
 
