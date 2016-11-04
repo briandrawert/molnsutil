@@ -870,6 +870,10 @@ class ParameterSweep(DistributedEnsemble):
             random_string = str(uuid.uuid4())
             temp_job_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "temp_" + random_string[:8])
 
+            # Create temp_job_directory.
+            if not os.path.exists(temp_job_directory):
+                os.makedirs(temp_job_directory)
+
             unpickled_inp = dict(mapped_results=kwargs['mapped_results'])
 
             input_file_path = os.path.join(temp_job_directory, constants.reduce_input_file_name)
