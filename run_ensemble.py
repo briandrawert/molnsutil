@@ -17,7 +17,8 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         """
 
     if cluster_import is True:
-        pass
+        from molnsutil.storage_providers import PersistentStorage, LocalStorage, SharedStorage
+        from molnsutil.molns_exceptions import MolnsUtilException
     else:
         from molns_exceptions import MolnsUtilException
         from storage_providers import PersistentStorage, LocalStorage, SharedStorage
@@ -68,8 +69,6 @@ if __name__ == "__main__":
     try:
         import molnsutil.constants as constants
         import molnsutil.molns_cloudpickle as molns_cloudpickle
-        from molnsutil.molns_exceptions import MolnsUtilException
-        from molnsutil.storage_providers import PersistentStorage, LocalStorage, SharedStorage
 
         with open(constants.job_input_file_name, "rb") as inp:
             unpickled_list = pickle.load(inp)
@@ -92,6 +91,6 @@ if __name__ == "__main__":
                               local_storage_path=os.path.dirname(os.path.abspath(__file__)), cluster_import=True)
         with open(constants.job_output_file_name, "wb") as output:
             molns_cloudpickle.dump(result, output)
-    except MolnsUtilException as errors:
+    except Exception as errors:
         with open(constants.job_error_file_name, "wb") as error:
             error.write(str(errors))

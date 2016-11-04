@@ -6,7 +6,8 @@ def run_ensemble_map_and_aggregate(model_class, parameters, param_set_id, seed_b
     """ Generate an ensemble, then run the mappers are aggregator.  This will not store the results. """
 
     if cluster_import is True:
-        pass
+        from molnsutil.molns_exceptions import MolnsUtilException
+        from molnsutil.utils import builtin_aggregator_list_append, create_model
     else:
         from molns_exceptions import MolnsUtilException
         from utils import builtin_aggregator_list_append, create_model
@@ -44,8 +45,6 @@ if __name__ == "__main__":
     try:
         import molnsutil.constants as constants
         import molnsutil.molns_cloudpickle as cloudpickle
-        from molnsutil.molns_exceptions import MolnsUtilException
-        from molnsutil.utils import builtin_aggregator_list_append, create_model
 
         with open(constants.job_input_file_name, "rb") as inp:
             unpickled_list = pickle.load(inp)
@@ -71,6 +70,6 @@ if __name__ == "__main__":
                                                 mapper=mapper_fn, aggregator=aggregator_fn, cluster_import=True)
         with open(constants.job_output_file_name, "wb") as output:
             cloudpickle.dump(result, output)
-    except MolnsUtilException as errors:
+    except Exception as errors:
         with open(constants.job_error_file_name, "wb") as error:
             error.write(str(errors))

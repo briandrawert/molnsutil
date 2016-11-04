@@ -16,7 +16,9 @@ def map_and_aggregate(results, param_set_id, mapper, aggregator=None, cache_resu
         """
 
     if cluster_import is True:
-        pass
+        from molnsutil.molns_exceptions import MolnsUtilException, MolnsUtilStorageException
+        from molnsutil.storage_providers import PersistentStorage, LocalStorage, SharedStorage
+        from molnsutil.utils import builtin_aggregator_list_append
     else:
         from molns_exceptions import MolnsUtilException, MolnsUtilStorageException
         from storage_providers import PersistentStorage, LocalStorage, SharedStorage
@@ -84,9 +86,6 @@ if __name__ == "__main__":
         import os
         import molnsutil.constants as constants
         import molnsutil.molns_cloudpickle as cloudpickle
-        from molnsutil.molns_exceptions import MolnsUtilException, MolnsUtilStorageException
-        from molnsutil.storage_providers import PersistentStorage, LocalStorage, SharedStorage
-        from molnsutil.utils import builtin_aggregator_list_append
 
         with open(constants.job_input_file_name, "rb") as inp:
             unpickled_list = pickle.load(inp)
@@ -110,6 +109,6 @@ if __name__ == "__main__":
                                    local_storage_directory=local_storage_directory_)
         with open(constants.job_output_file_name, "wb") as output:
             cloudpickle.dump(result, output)
-    except MolnsUtilException as errors:
+    except Exception as errors:
         with open(constants.job_error_file_name, "wb") as error:
             error.write(str(errors))
