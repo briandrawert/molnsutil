@@ -328,13 +328,6 @@ class DistributedEnsemble:
         # write job program file.
         shutil.copyfile(job_program_file, os.path.join(temp_job_directory, constants.qsub_job_name))
 
-        # write package files.
-        # shutil.copyfile(constants.molns_cloudpickle_file, os.path.join(temp_job_directory, "molns_cloudpickle.py"))
-        # shutil.copyfile(constants.utils_file, os.path.join(temp_job_directory, "utils.py"))
-        # shutil.copyfile(constants.storage_providers_file, os.path.join(temp_job_directory, "storage_providers.py"))
-        # shutil.copyfile(constants.molns_exceptions_file, os.path.join(temp_job_directory, "molns_exceptions.py"))
-        # shutil.copyfile(constants.constants_file, os.path.join(temp_job_directory, "constants.py"))
-
         # append to list of related job containers
         containers.append(job_name)
         # invoke qsub to start container with same name as job_name
@@ -866,7 +859,7 @@ class ParameterSweep(DistributedEnsemble):
             parameter_sweep_run_reducer(self.parameters, kwargs['reducer'], kwargs['mapped_results'])
         else:
             import shutil
-            from subprocess import Popen
+            import subprocess
             random_string = str(uuid.uuid4())
             temp_job_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "tmpRed_" + random_string)
 
@@ -874,7 +867,7 @@ class ParameterSweep(DistributedEnsemble):
             if not os.path.exists(temp_job_directory):
                 os.makedirs(temp_job_directory)
 
-            unpickled_inp = dict(mapped_results=kwargs['mapped_results'])
+            unpickled_inp = dict(mapped_results=kwargs['mapped_results'], parameters=self.parameters)
 
             input_file_path = os.path.join(temp_job_directory, constants.reduce_input_file_name)
             # Write input file
@@ -895,13 +888,10 @@ class ParameterSweep(DistributedEnsemble):
                                 constants.parameter_sweep_run_reducer_pyfile)))
 
             # Invoke parameter_sweep_run_reducer.
-            Popen(["bash", os.path.join(temp_job_directory,
-                                        os.path.basename(constants.parameter_sweep_run_reducer_shell_script))],
-                  shell=False)
+            subprocess.call([os.path.join(".", temp_job_directory,
+                                          os.path.basename(constants.parameter_sweep_run_reducer_shell_script))])
 
             failed_job = self._wait_for_all_results_to_return([temp_job_directory])
-
-            # TODO debug from here
 
             if len(failed_job) > 0:
                 raise MolnsUtilException("Failed to reduce results. Job directory {0} will not be deleted."

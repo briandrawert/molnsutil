@@ -34,12 +34,13 @@ if __name__ == "__main__":
             unpickled_list = pickle.load(inp)
 
         mapped_results = unpickled_list['mapped_results']
+        params = unpickled_list['parameters']
 
         with open(constants.pickled_cluster_input_file, "rb") as inp:
             unpickled_cluster_input = pickle.load(inp)
             reducer = unpickled_cluster_input['reducer']
 
-        result = parameter_sweep_run_reducer(reducer=reducer, mapped_results=mapped_results)
+        result = parameter_sweep_run_reducer(reducer=reducer, mapped_results=mapped_results, parameters=params)
 
         with open(constants.job_output_file_name, "wb") as output:
             pickle.dump(result, output)
