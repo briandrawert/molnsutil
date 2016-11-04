@@ -329,11 +329,11 @@ class DistributedEnsemble:
         shutil.copyfile(job_program_file, os.path.join(temp_job_directory, constants.qsub_job_name))
 
         # write package files.
-        shutil.copyfile(constants.molns_cloudpickle_file, os.path.join(temp_job_directory, "molns_cloudpickle.py"))
-        shutil.copyfile(constants.utils_file, os.path.join(temp_job_directory, "utils.py"))
-        shutil.copyfile(constants.storage_providers_file, os.path.join(temp_job_directory, "storage_providers.py"))
-        shutil.copyfile(constants.molns_exceptions_file, os.path.join(temp_job_directory, "molns_exceptions.py"))
-        shutil.copyfile(constants.constants_file, os.path.join(temp_job_directory, "constants.py"))
+        # shutil.copyfile(constants.molns_cloudpickle_file, os.path.join(temp_job_directory, "molns_cloudpickle.py"))
+        # shutil.copyfile(constants.utils_file, os.path.join(temp_job_directory, "utils.py"))
+        # shutil.copyfile(constants.storage_providers_file, os.path.join(temp_job_directory, "storage_providers.py"))
+        # shutil.copyfile(constants.molns_exceptions_file, os.path.join(temp_job_directory, "molns_exceptions.py"))
+        # shutil.copyfile(constants.constants_file, os.path.join(temp_job_directory, "constants.py"))
 
         # append to list of related job containers
         containers.append(job_name)

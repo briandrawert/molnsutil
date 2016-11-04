@@ -35,15 +35,15 @@ if __name__ == "__main__":
 
         mapped_results = unpickled_list['mapped_results']
 
-        with open("input", "rb") as inp:
+        with open(constants.pickled_cluster_input_file, "rb") as inp:
             unpickled_cluster_input = pickle.load(inp)
             reducer = unpickled_cluster_input['reducer']
 
         result = parameter_sweep_run_reducer(reducer=reducer, mapped_results=mapped_results)
 
-        with open("output", "wb") as output:
+        with open(constants.job_output_file_name, "wb") as output:
             pickle.dump(result, output)
 
     except Exception as errors:
-        with open("error", "wb") as error:
+        with open(constants.job_error_file_name, "wb") as error:
             error.write(str(errors))
