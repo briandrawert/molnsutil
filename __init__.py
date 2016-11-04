@@ -896,7 +896,8 @@ class ParameterSweep(DistributedEnsemble):
             container_name = os.path.basename(temp_job_directory)
 
             # Invoke parameter_sweep_run_reducer.
-            ret_code = subprocess.check_call("bash {0} {1}".format(reduce_script_file, container_name), shell=True)
+            ret_code = subprocess.check_call("bash {0} {1} {2}".format(reduce_script_file, container_name,
+                                                                       temp_job_directory), shell=True)
 
             # DEBUG
             with open(os.path.join(temp_job_directory, "after call DEBUG"), "wb") as input_file:
