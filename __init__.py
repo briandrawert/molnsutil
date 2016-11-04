@@ -290,11 +290,17 @@ class DistributedEnsemble:
                     dirs.remove(directory)
                     successful_jobs += 1
                     completed_jobs += 1
+                    # DEBUG
+                    with open(os.path.join(directory, "wait_for_results_output_exists"), "wb") as input_file:
+                        input_file.write("before popen")
                     self.log.write_log("{0} exists".format(output_file))
 
                 elif os.path.exists(completed_file):
                     if os.path.exists(output_file):  # There could be a race condition here.
                         continue
+                    # DEBUG
+                    with open(os.path.join(directory, "wait_for_results_complete_exists"), "wb") as input_file:
+                        input_file.write("before popen")
                     keep_dirs.append(directory)
                     dirs.remove(directory)
                     completed_jobs += 1
@@ -887,9 +893,17 @@ class ParameterSweep(DistributedEnsemble):
                             os.path.join(temp_job_directory, os.path.basename(
                                 constants.parameter_sweep_run_reducer_pyfile)))
 
+            # DEBUG
+            with open(os.path.join(temp_job_directory, "before_popen"), "wb") as input_file:
+                input_file.write("before popen")
+
             # Invoke parameter_sweep_run_reducer.
-            subprocess.Popen(["/bin/bash", os.path.join(temp_job_directory, os.path.basename(
+            p = subprocess.Popen(["/bin/bash", os.path.join(temp_job_directory, os.path.basename(
                 constants.parameter_sweep_run_reducer_shell_script))])
+
+            # DEBUG
+            with open(os.path.join(temp_job_directory, "after_popen"), "wb") as input_file:
+                input_file.write("after popen")
 
             failed_job = self._wait_for_all_results_to_return([temp_job_directory])
 
