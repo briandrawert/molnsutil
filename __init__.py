@@ -894,6 +894,10 @@ class ParameterSweep(DistributedEnsemble):
             # Invoke parameter_sweep_run_reducer.
             subprocess.call("bash {0} {1}".format(reduce_script_file, container_name), shell=True)
 
+            # DEBUG
+            with open(os.path.join(temp_job_directory, "after call DEBUG"), "wb") as input_file:
+                input_file.write("{0}\n{1}".format(temp_job_directory, container_name))
+
             failed_job = self._wait_for_all_results_to_return([temp_job_directory])
 
             if len(failed_job) > 0:
@@ -903,7 +907,7 @@ class ParameterSweep(DistributedEnsemble):
             with open(os.path.join(temp_job_directory, constants.job_output_file_name), "rb") as of:
                 result = pickle.load(of)
 
-                # DEBUG
+            # DEBUG
             with open(os.path.join(temp_job_directory, "DEBUG"), "wb") as input_file:
                 input_file.write("{0}\n{1}".format(temp_job_directory, container_name))
 
