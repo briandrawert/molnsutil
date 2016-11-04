@@ -896,15 +896,11 @@ class ParameterSweep(DistributedEnsemble):
             container_name = os.path.basename(temp_job_directory)
 
             # Invoke parameter_sweep_run_reducer.
-            ret_code = subprocess.call("bash {0} {1}".format(reduce_script_file, container_name), shell=True)
-
-            if ret_code != 0:
-                raise MolnsUtilException("Could not start container successfully to run reducer. Error code: {0}"
-                                         .format(ret_code))
+            ret_code = subprocess.check_call("bash {0} {1}".format(reduce_script_file, container_name), shell=True)
 
             # DEBUG
             with open(os.path.join(temp_job_directory, "after call DEBUG"), "wb") as input_file:
-                input_file.write("{0}\n{1}".format(temp_job_directory, container_name))
+                input_file.write("{0}\n{1}\n{2}".format(temp_job_directory, container_name, ret_code))
 
             failed_job = self._wait_for_all_results_to_return([temp_job_directory])
 
