@@ -896,7 +896,7 @@ class ParameterSweep(DistributedEnsemble):
                 input_file.write("{0}\n{1}".format(reduce_script_file, container_name))
 
             # Invoke parameter_sweep_run_reducer.
-            subprocess.Popen("bash {0} {1}".format(reduce_script_file, container_name))
+            subprocess.call("bash {0} {1}".format(reduce_script_file, container_name), shell=True)
 
             failed_job = self._wait_for_all_results_to_return([temp_job_directory])
 
