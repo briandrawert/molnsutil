@@ -26,19 +26,19 @@ class ParameterSweepResultList(list):
 
 
 if __name__ == "__main__":
-    import pickle
-    import constants
+    try:
+        import pickle
+        import molnsutil.constants as constants
 
-    with open(constants.job_input_file_name, "rb") as inp:
-        unpickled_list = pickle.load(inp)
+        with open(constants.job_input_file_name, "rb") as inp:
+            unpickled_list = pickle.load(inp)
 
-    mapped_results = unpickled_list['mapped_results']
+        mapped_results = unpickled_list['mapped_results']
 
-    with open("input", "rb") as inp:
+        with open("input", "rb") as inp:
             unpickled_cluster_input = pickle.load(inp)
             reducer = unpickled_cluster_input['reducer']
 
-    try:
         result = parameter_sweep_run_reducer(reducer=reducer, mapped_results=mapped_results)
 
         with open("output", "wb") as output:
