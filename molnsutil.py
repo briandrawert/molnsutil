@@ -441,8 +441,10 @@ class DistributedEnsemble:
 
         return mapped_results
 
-    def run_reducer(self, reducer, mapped_results):
+    def run_reducer(self, **kwargs):
         """ Inside the run() function, apply the reducer to all of the mapped-aggregated result values. """
+        reducer = kwargs['reducer']
+        mapped_results = kwargs['mapped_results']
         return reducer(mapped_results[0], parameters=self.parameters[0])
 
     def _ipython_generate_and_store_realisations(self, num_pchunks, pparams, param_set_ids, seed_list, pchunks,
@@ -731,7 +733,7 @@ class DistributedEnsemble:
                                                                                   realizations_storage_directory)
                 else:
                     mapped_results = self._qsub_map_aggregate_stored_realizations(pickled_cluster_input_file=
-                                                                                  kwargs['pickled_cluster_input_file'],
+                                                                                  self.pickled_cluster_input_file,
                                                                                   chunk_size=chunk_size,
                                                                                   realizations_storage_directory=
                                                                                   realizations_storage_directory)
@@ -752,7 +754,7 @@ class DistributedEnsemble:
                                                                            aggregator=kwargs['aggregator'])
                 else:
                     mapped_results = self._qsub_run_ensemble_map_aggregate(
-                        pickled_cluster_input_file=kwargs['pickled_cluster_input_file'],
+                        pickled_cluster_input_file=self.pickled_cluster_input_file,
                         number_of_trajectories=number_of_trajectories, chunk_size=chunk_size)
 
         self.log.write_log("Running reducer on mapped and aggregated results (size={0})".format(len(mapped_results)))
@@ -761,7 +763,8 @@ class DistributedEnsemble:
         if self.cluster_execution is False:
             return self.run_reducer(reducer=reducer, mapped_results=mapped_results)
         else:
-            return self.run_reducer(mapped_results=mapped_results)
+            return self.run_reducer(mapped_results=mapped_results,
+                                    pickled_cluster_input_file=self.pickled_cluster_input_file)
 
             # -------- Convenience functions with builtin mappers/reducers  ------------------
 
@@ -875,7 +878,7 @@ class ParameterSweep(DistributedEnsemble):
                 cloudpickle.dump(unpickled_inp, input_file)
 
             # Copy input files to working directory.
-            shutil.copyfile(self.pickled_cluster_input_file, os.path.join(temp_job_directory,
+            shutil.copyfile(kwargs['pickled_cluster_input_file'], os.path.join(temp_job_directory,
                                                                           constants.pickled_cluster_input_file))
             shutil.copyfile(input_file_path, os.path.join(temp_job_directory, constants.job_input_file_name))
 

@@ -33,11 +33,6 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     # Create the model
     notes = ""
     try:
-        notes = "hello"
-        notes += str(molns_cloudpickle)
-        import molnsutil
-        notes += str(molnsutil)
-        sys.modules['molns_cloudpickle'] = molns_cloudpickle
         model_class_cls = molns_cloudpickle.loads(model_class)
         if parameters is not None:
             model = model_class_cls(**parameters)
