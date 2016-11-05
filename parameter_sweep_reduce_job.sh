@@ -10,7 +10,7 @@ run_reducer()
   COMMAND="docker run -e PYTHONPATH=/stochss-master/app/lib -e STOCHKIT_HOME=/stochss-master/StochKit --volume ${c_dir}:/stochss-master/app/lib/w_dir/ --volume ${molnsutil_dir}:/stochss-master/app/lib/molnsutil/ -w /stochss-master/app/lib/w_dir/ --name `basename ${1}` aviralcse/stochss_qsub python parameter_sweep_run_reducer.py ${job_working_directory}"
 
   ${COMMAND}
-  touch ${c_dir}/complete
+  echo ${COMMAND} > ${c_dir}/complete
 }
 
 # RUN

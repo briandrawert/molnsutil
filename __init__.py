@@ -875,7 +875,7 @@ class ParameterSweep(DistributedEnsemble):
 
             # Copy input files to working directory.
             shutil.copyfile(kwargs['pickled_cluster_input_file'], os.path.join(temp_job_directory,
-                                                                          constants.pickled_cluster_input_file))
+                                                                               constants.pickled_cluster_input_file))
             shutil.copyfile(input_file_path, os.path.join(temp_job_directory, constants.job_input_file_name))
 
             # Copy library scripts to working directory.
@@ -892,7 +892,7 @@ class ParameterSweep(DistributedEnsemble):
 
             # Invoke parameter_sweep_run_reducer.
             subprocess.check_call("bash {0} {1} {2}".format(reduce_script_file, container_name,
-                                                                       temp_job_directory), shell=True)
+                                                            temp_job_directory), shell=True)
 
             failed_job = self._wait_for_all_results_to_return([temp_job_directory])
 

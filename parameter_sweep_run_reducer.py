@@ -26,8 +26,6 @@ class ParameterSweepResultList(list):
 
 
 if __name__ == "__main__":
-    import sys
-    job_directory = sys.argv[1]
 
     try:
         import pickle
@@ -50,5 +48,5 @@ if __name__ == "__main__":
             pickle.dump(result, output)
 
     except Exception as errors:
-        with open(os.path.join(job_directory, constants.job_reducer_error_file_name), "wb") as error:
+        with open(constants.job_reducer_error_file_name, "wb") as error:
             error.write(str(errors))
