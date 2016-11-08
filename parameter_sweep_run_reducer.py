@@ -1,8 +1,15 @@
-def parameter_sweep_run_reducer(parameters, reducer, mapped_results):
-    ret = ParameterSweepResultList()
+def parameter_sweep_run_reducer(parameters, reducer, mapped_results, cluster_execution=False):
+
+    if cluster_execution is False:
+        ret = ParameterSweepResultList()
+        format_func = ParameterSweepResult
+    else:
+        ret = list()
+        format_func = dict
+
     for param_set_id, param in enumerate(parameters):
-        ret.append(ParameterSweepResult(reducer(mapped_results[param_set_id], parameters=param),
-                                        parameters=param))
+        ret.append(format_func(result=reducer(mapped_results[param_set_id], parameters=param), parameters=param))
+
     return ret
 
 
@@ -42,7 +49,8 @@ if __name__ == "__main__":
             unpickled_cluster_input = pickle.load(inp)
             reducer = unpickled_cluster_input['reducer']
 
-        result = parameter_sweep_run_reducer(reducer=reducer, mapped_results=mapped_results, parameters=params)
+        result = parameter_sweep_run_reducer(reducer=reducer, mapped_results=mapped_results, parameters=params,
+                                             cluster_execution=True)
 
         with open(constants.job_output_file_name, "wb") as output:
             pickle.dump(result, output)
