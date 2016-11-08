@@ -904,7 +904,7 @@ class ParameterSweep(DistributedEnsemble):
                 result = of.read()
 
             # Remove job directory and container.
-            clean_up([temp_job_directory], [temp_job_directory])
+            clean_up([temp_job_directory], [container_name])
 
             return result
 
