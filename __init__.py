@@ -64,7 +64,7 @@ class DistributedEnsemble:
             raise MolnsUtilException("Invalid configuration. Either provide a model class object or its pickled file.")
 
         if model_class is not None and pickled_cluster_input_file is not None:
-            raise MolnsUtilException("Invalid configuration. Both a model class and its pickled file are provided.")
+            raise MolnsUtilException("Invalid configuration. Both a model class and a pickled file are provided.")
 
         if model_class is not None:
             self.cluster_execution = False
