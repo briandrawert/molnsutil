@@ -115,7 +115,7 @@ def clean_up(dirs_to_delete=None, containers_to_delete=None):
 
     if containers_to_delete is not None:
         for container in containers_to_delete:
-            Popen(['sudo', 'docker', 'rm', '-f', container], shell=False)
+            Popen(['docker', 'rm', '-f', container], shell=False)
 
 
 def generate_seed_base():
