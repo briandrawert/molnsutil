@@ -535,12 +535,12 @@ class DistributedEnsemble:
                     shutil.copyfile(os.path.join(directory, f), os.path.join(base_dir, f))
                     break
 
-    def add_realizations(self, number_of_trajectories=None, chunk_size=None, progress_bar=True):
+    def add_realizations(self, number_of_trajectories=None, chunk_size=None, progress_bar=False):
         """ Add a number of realizations to the ensemble. """
 
         if number_of_trajectories is None:
             raise MolnsUtilException("No number_of_trajectories specified")
-        if type(number_of_trajectories) is not type(1):
+        if type(number_of_trajectories) is not int:
             raise MolnsUtilException("number_of_trajectories must be an integer")
 
         if chunk_size is None:
