@@ -1,3 +1,6 @@
+import argparse as ap
+
+
 def parameter_sweep_run_reducer(parameters, reducer, mapped_results, cluster_execution=False):
 
     if cluster_execution is False:
@@ -5,12 +8,17 @@ def parameter_sweep_run_reducer(parameters, reducer, mapped_results, cluster_exe
         format_func = ParameterSweepResult
     else:
         ret = list()
-        format_func = dict
+        format_func = cluster_dict
 
     for param_set_id, param in enumerate(parameters):
         ret.append(format_func(result=reducer(mapped_results[param_set_id], parameters=param), parameters=param))
 
     return ret
+
+
+def cluster_dict(result, parameters):
+    d = dict(result=result, parameters=parameters)
+    return ap.Namespace(**d)
 
 
 class ParameterSweepResult:
