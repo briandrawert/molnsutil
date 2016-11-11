@@ -606,6 +606,8 @@ class DistributedEnsemble:
 
     def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
+        if self.qsub:
+            return 1
         return int(max(1, round(number_of_trajectories / float(self.num_engines))))
 
     def _clear_cache(self):
