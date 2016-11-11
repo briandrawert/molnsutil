@@ -87,7 +87,7 @@ def copy_generated_realizations_to_job_directory(realizations_storage_directory,
 
     for f in os.listdir(realizations_storage_directory):
         f_abs = os.path.join(realizations_storage_directory, f)
-        if is_generated_realizations_file(f_abs):
+        if is_generated_realizations_file(f):
             shutil.copy(f_abs, store_realizations_dir)
             os.remove(f_abs)
 
