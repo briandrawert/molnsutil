@@ -525,17 +525,13 @@ class DistributedEnsemble:
     @staticmethod
     def __post_process_generated_ensemble(directories, base_dir):
         import shutil
-        copied_at_least_one_file = False
         for directory in directories:
             files_in_this_directory = os.listdir(directory)
             for f in files_in_this_directory:
                 if utils.is_generated_realizations_file(f):
                     # copy file to parent directory.
                     shutil.copyfile(os.path.join(directory, f), os.path.join(base_dir, f))
-                    copied_at_least_one_file = True
                     break
-        if copied_at_least_one_file is False:
-            raise Exception("No realizations generated.")
 
     def add_realizations(self, number_of_trajectories=None, chunk_size=None, progress_bar=False):
         """ Add a number of realizations to the ensemble. """
