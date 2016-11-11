@@ -524,16 +524,18 @@ class DistributedEnsemble:
 
     @staticmethod
     def __post_process_generated_ensemble(directories, base_dir):
-        import re
         import shutil
-        exp = re.compile(r'[0-9a-f-]{36}')
+        copied_at_least_one_file = False
         for directory in directories:
             files_in_this_directory = os.listdir(directory)
             for f in files_in_this_directory:
-                if exp.match(f):
+                if utils.is_generated_realizations_file(f):
                     # copy file to parent directory.
                     shutil.copyfile(os.path.join(directory, f), os.path.join(base_dir, f))
+                    copied_at_least_one_file = True
                     break
+        if copied_at_least_one_file is False:
+            raise Exception("No realizations generated.")
 
     def add_realizations(self, number_of_trajectories=None, chunk_size=None, progress_bar=False):
         """ Add a number of realizations to the ensemble. """
@@ -708,16 +710,10 @@ class DistributedEnsemble:
             else:
                 realizations_storage_directory = generated_realizations['realizations_directory']
                 if store_realizations_dir is not None:
-                    if not os.access(store_realizations_dir, os.W_OK):
-                        raise MolnsUtilException("Cannot access provided storage directory: {0}"
-                                                 .format(store_realizations_dir))
-                    import shutil
-                    for f in os.listdir(realizations_storage_directory):
-                        f_abs = os.path.join(realizations_storage_directory, f)
-                        shutil.copy(f_abs, store_realizations_dir)
-                        os.remove(f_abs)
-                    os.rmdir(realizations_storage_directory)
-                    realizations_storage_directory = store_realizations_dir
+                    # Copy realizations from temporary working directory to job directory.
+                    realizations_storage_directory = utils.copy_generated_realizations_to_job_directory(
+                        realizations_storage_directory=realizations_storage_directory,
+                        store_realizations_dir=store_realizations_dir)
 
                 if self.cluster_execution is False:
                     mapped_results = self._qsub_map_aggregate_stored_realizations(mapper=kwargs['mapper'],

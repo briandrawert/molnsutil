@@ -72,6 +72,31 @@ def create_model(model_class, parameters):
 
 # ----- functions to use for the DistributedEnsemble class ----
 
+def is_generated_realizations_file(f):
+    import re
+    exp = re.compile(r'[0-9a-f-]{36}')
+    return exp.match(f)
+
+
+def copy_generated_realizations_to_job_directory(realizations_storage_directory, store_realizations_dir):
+    import os
+    import shutil
+
+    if not os.access(store_realizations_dir, os.W_OK):
+        raise MolnsUtilException("Cannot access provided storage directory: {0}".format(store_realizations_dir))
+
+    for f in os.listdir(realizations_storage_directory):
+        f_abs = os.path.join(realizations_storage_directory, f)
+        if is_generated_realizations_file(f_abs):
+            shutil.copy(f_abs, store_realizations_dir)
+            os.remove(f_abs)
+
+    if len(os.listdir(realizations_storage_directory)) == 0:
+        os.rmdir(realizations_storage_directory)
+
+    return store_realizations_dir
+
+
 def write_file(storage_mode, filename, result):
 
     if storage_mode == "Shared":
