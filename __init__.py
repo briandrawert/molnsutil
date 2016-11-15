@@ -14,7 +14,7 @@ from run_ensemble_map_aggregate import run_ensemble_map_and_aggregate
 from storage_providers import SharedStorage, PersistentStorage
 from utils import Log, clean_up, update_progressbar, display_progressbar, builtin_reducer_mean, generate_seed_base, \
     builtin_aggregator_list_append, builtin_reducer_default, builtin_aggregator_sum_and_sum2, builtin_aggregator_add, \
-    builtin_reducer_mean_variance, get_unpickled_result, jsonify_execption_message
+    builtin_reducer_mean_variance, get_unpickled_result, jsonify
 
 """
   Utility module for MOLNs.
@@ -61,11 +61,11 @@ class DistributedEnsemble:
         self.my_class_name = 'DistributedEnsemble'
 
         if model_class is None and pickled_cluster_input_file is None:
-            raise MolnsUtilException(jsonify_execption_message(
+            raise MolnsUtilException(jsonify(
                 logs="Invalid configuration. Either provide a model class object or its pickled file."))
 
         if model_class is not None and pickled_cluster_input_file is not None:
-            raise MolnsUtilException(jsonify_execption_message(
+            raise MolnsUtilException(jsonify(
                 logs="Invalid configuration. Both a model class and a pickled file are provided."))
 
         if model_class is not None:
@@ -122,7 +122,7 @@ class DistributedEnsemble:
         if not isinstance(pparams, list) or not isinstance(param_set_ids, list) or \
                 (presult_list is not None and not isinstance(presult_list, list)) or \
                 (presult_list is not None and chunk_size is None):
-            raise MolnsUtilException(jsonify_execption_message(
+            raise MolnsUtilException(jsonify(
                 logs="Unexpected arguments. Require pparams, param_set_ids (and presult_list) to be of type list. "
                      "chunk_size cannot be None if presult_list is not None."))
 
@@ -178,8 +178,8 @@ class DistributedEnsemble:
         counter = 0
         random_string = str(uuid.uuid4())
         if not os.path.isdir(realizations_storage_directory):
-            raise MolnsUtilException(jsonify_execption_message(logs="Directory {0} does not exist."
-                                                               .format(realizations_storage_directory)))
+            raise MolnsUtilException(jsonify(logs="Directory {0} does not exist."
+                                             .format(realizations_storage_directory)))
 
         base_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "temp_" + random_string)
         job_name_prefix = "ps_job_" + random_string[:8] + "_"
@@ -300,11 +300,11 @@ class DistributedEnsemble:
                 if os.path.exists(error_file):
                     with open(error_file, 'r') as ef:
                         error_msg = ef.read()
-                    import json
-                    raise MolnsUtilException(json.dumps({"message": "Job failed.", "completed_jobs": completed_jobs,
-                                                         "successful_jobs": successful_jobs, "total_jobs": total_jobs,
-                                                         "failed_job_working_directory": directory, "logs": error_msg,
-                                                         "job_directories": wait_for_dirs}))
+                    raise MolnsUtilException(jsonify(completed_jobs=completed_jobs,
+                                                     successful_jobs=successful_jobs,
+                                                     total_jobs=total_jobs,
+                                                     failed_job_working_directory=directory,
+                                                     logs=error_msg, job_directories=wait_for_dirs))
 
                 elif os.path.exists(completed_file):
                     if os.path.exists(output_file):  # There could be a race condition here.
@@ -491,7 +491,7 @@ class DistributedEnsemble:
 
         if self.storage_mode is not constants.local_storage:
             import json
-            raise MolnsUtilException(jsonify_execption_message(logs="Storage mode must be local while using qsub."))
+            raise MolnsUtilException(jsonify(logs="Storage mode must be local while using qsub."))
 
         for pndx, pset, seed, pchunk in zip(param_set_ids, pparams, seed_list, pchunks):
             if self.cluster_execution is True:
@@ -552,9 +552,9 @@ class DistributedEnsemble:
         """ Add a number of realizations to the ensemble. """
 
         if number_of_trajectories is None:
-            raise MolnsUtilException(jsonify_execption_message(logs="No number_of_trajectories specified"))
+            raise MolnsUtilException(jsonify(logs="No number_of_trajectories specified"))
         if type(number_of_trajectories) is not int:
-            raise MolnsUtilException(jsonify_execption_message(
+            raise MolnsUtilException(jsonify(
                 logs="number_of_trajectories must be an integer. Provided type: {0}".format(
                     type(number_of_trajectories))))
 
@@ -852,7 +852,7 @@ class ParameterSweep(DistributedEnsemble):
         elif type(parameters) is list:
             self.parameters = parameters
         else:
-            raise MolnsUtilException(jsonify_execption_message(logs="parameters must be a dict."))
+            raise MolnsUtilException(jsonify(logs="parameters must be a dict."))
 
     def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
@@ -908,7 +908,7 @@ class ParameterSweep(DistributedEnsemble):
             failed_job = self._wait_for_all_results_to_return([temp_job_directory])
 
             if len(failed_job) > 0:
-                raise MolnsUtilException(jsonify_execption_message(logs="Failed to reduce results. "
+                raise MolnsUtilException(jsonify(logs="Failed to reduce results. "
                                                                         "Job directory {0} will not be deleted.".format(
                                                                          temp_job_directory)))
 
