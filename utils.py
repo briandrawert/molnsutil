@@ -156,6 +156,11 @@ def get_unpickled_result(directory):
         return pickle.load(output)
 
 
+def jsonify_execption_message(**kwargs):
+    import json
+    return json.dumps(kwargs)
+
+
 class Log:
     def __init__(self, verbose=True):
         self.verbose = verbose

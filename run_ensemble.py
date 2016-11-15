@@ -30,7 +30,8 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
     elif storage_mode == constants.local_storage:
         storage = LocalStorage(local_storage_path)
     else:
-        raise MolnsUtilException("Unknown storage type '{0}'".format(storage_mode))
+        import traceback
+        raise MolnsUtilException("Unknown storage type '{0}'\n{1}".format(storage_mode, traceback.format_exc()))
 
     # Create the model
     notes = ""
@@ -41,8 +42,9 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
         else:
             model = model_class_cls()
     except Exception as e:
+        import traceback
         notes += "Error caught instantiating the model class {0}\n".format(str(e))
-        notes += "dir={0}\n".format(dir())
+        notes += "dir={0}\n{1}".format(dir(), traceback.format_exc())
         raise MolnsUtilException(notes)
 
     # Run the solver
@@ -59,7 +61,8 @@ def run_ensemble(model_class, parameters, param_set_id, seed_base, number_of_tra
             storage.put(filename, result)
             filenames.append(filename)
         except Exception as e:
-            notes += "Error writing result {0}. Error: {1}. \n\n".format(result, str(e))
+            import traceback
+            notes += "Error writing result {0}. Error: {1}. \n\n{2}\n".format(result, str(e), traceback.format_exc())
             raise MolnsUtilException(notes)
 
     return {'filenames': filenames, 'param_set_id': param_set_id}
