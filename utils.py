@@ -129,7 +129,6 @@ def update_progressbar(divid, i, length):
 
 def clean_up(dirs_to_delete=None, containers_to_delete=None):
     import shutil
-    from subprocess import Popen
 
     if type(dirs_to_delete) is not type([]) or type(containers_to_delete) is not type([]):
         raise MolnsUtilException("Unexpected type. Expecting {0}.".format(type([])))
@@ -138,9 +137,11 @@ def clean_up(dirs_to_delete=None, containers_to_delete=None):
         for directory in dirs_to_delete:
             shutil.rmtree(directory)
 
-    if containers_to_delete is not None:
-        for container in containers_to_delete:
-            Popen(['docker', 'rm', '-f', container], shell=False)
+    # Uncomment the following if job containers need to be deleted from the runtime environment.
+    # from subprocess import Popen
+    # if containers_to_delete is not None:
+    #     for container in containers_to_delete:
+    #         Popen(['docker', 'rm', '-f', container], shell=False)
 
 
 def generate_seed_base():

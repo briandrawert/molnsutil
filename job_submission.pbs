@@ -33,6 +33,10 @@ runprogram()
 
   ${COMMAND}
   touch complete
+
+  DEL_COMMAND="docker rm -f ${PBS_JOBNAME}"
+
+  ${DEL_COMMAND}
 }
 
 # RUN
