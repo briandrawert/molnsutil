@@ -541,7 +541,7 @@ class DistributedEnsemble:
         # Delete job containers and directories. Preserve base_dir as it contains computed realizations.
         clean_up(dirs_to_delete=remove_dirs, containers_to_delete=containers)
 
-        return {'wall_time': "unknown", 'serial_time': "unknown", 'realizations_directory': base_dir}
+        return jsonify(realizations_directory=base_dir)
 
     @staticmethod
     def __post_process_generated_ensemble(directories, base_dir):
