@@ -319,12 +319,11 @@ class DistributedEnsemble:
                     update_progressbar(divid, completed_jobs, total_jobs)
             time.sleep(1)
             timer_current = time.time()
-            if timer_current - timer_start > constants.MaxJobTimeInSeconds
+            if timer_current - timer_start > constants.MaxJobTimeInSeconds:
                 raise MolnsUtilException(jsonify(completed_jobs=completed_jobs,
-                                                     successful_jobs=successful_jobs,
-                                                     total_jobs=total_jobs,
-                                                     logs="Job timed out.", job_directories=wait_for_dirs))
-
+                                                 successful_jobs=successful_jobs,
+                                                 total_jobs=total_jobs,
+                                                 logs="Job timed out.", job_directories=wait_for_dirs))
 
         if completed_jobs > successful_jobs:
             self.log.write_log(
