@@ -83,7 +83,8 @@ def copy_generated_realizations_to_job_directory(realizations_storage_directory,
     import shutil
 
     if not os.access(store_realizations_dir, os.W_OK):
-        raise MolnsUtilException("Cannot access provided storage directory: {0}".format(store_realizations_dir))
+        raise MolnsUtilException(jsonify(logs="Cannot access provided storage directory: {0}"
+                                         .format(store_realizations_dir)))
 
     for f in os.listdir(realizations_storage_directory):
         f_abs = os.path.join(realizations_storage_directory, f)
