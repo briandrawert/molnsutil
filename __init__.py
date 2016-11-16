@@ -903,14 +903,13 @@ class ParameterSweep(DistributedEnsemble):
 
             # Invoke parameter_sweep_run_reducer.
             subprocess.check_call("bash {0} {1} {2}".format(reduce_script_file, container_name,
-                                                            temp_job_directory), shell=True)
+                                                            temp_job_directory), shell=False)
 
             failed_job = self._wait_for_all_results_to_return([temp_job_directory])
 
             if len(failed_job) > 0:
-                raise MolnsUtilException(jsonify(logs="Failed to reduce results. "
-                                                                        "Job directory {0} will not be deleted.".format(
-                                                                         temp_job_directory)))
+                raise MolnsUtilException(jsonify(logs="Failed to reduce results. Job directory {0} will not be deleted."
+                                                      .format(temp_job_directory)))
 
             with open(os.path.join(temp_job_directory, constants.job_output_file_name), "r") as of:
                 result = of.read()
