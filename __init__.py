@@ -276,7 +276,7 @@ class DistributedEnsemble:
         unsuccessfully."""
 
         import time
-
+        timer_start = time.time()
         dirs = wait_for_dirs[:]
         completed_jobs = 0
         successful_jobs = 0
@@ -318,6 +318,13 @@ class DistributedEnsemble:
                 if divid is not None and progress_bar is True:
                     update_progressbar(divid, completed_jobs, total_jobs)
             time.sleep(1)
+            timer_current = time.time()
+            if timer_current - timer_start > constants.MaxJobTimeInSeconds
+                raise MolnsUtilException(jsonify(completed_jobs=completed_jobs,
+                                                     successful_jobs=successful_jobs,
+                                                     total_jobs=total_jobs,
+                                                     logs="Job timed out.", job_directories=wait_for_dirs))
+
 
         if completed_jobs > successful_jobs:
             self.log.write_log(
