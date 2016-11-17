@@ -456,9 +456,61 @@ class DistributedEnsemble:
 
     def run_reducer(self, **kwargs):
         """ Inside the run() function, apply the reducer to all of the mapped-aggregated result values. """
-        reducer = kwargs['reducer']
-        mapped_results = kwargs['mapped_results']
-        return reducer(mapped_results[0], parameters=self.parameters[0])
+        if self.qsub is False:
+            reducer = kwargs['reducer']
+            mapped_results = kwargs['mapped_results']
+            return reducer(mapped_results[0], parameters=self.parameters[0])
+        else:
+            import shutil
+            import subprocess
+            random_string = str(uuid.uuid4())
+            temp_job_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "tmpRed_" + random_string)
+
+            # Create temp_job_directory.
+            if not os.path.exists(temp_job_directory):
+                os.makedirs(temp_job_directory)
+
+            unpickled_inp = dict(mapped_results=kwargs['mapped_results'], parameters=self.parameters)
+
+            input_file_path = os.path.join(temp_job_directory, constants.reduce_input_file_name)
+            # Write input file
+            with open(input_file_path, "wb") as input_file:
+                cloudpickle.dump(unpickled_inp, input_file)
+
+            # Copy input files to working directory.
+            shutil.copyfile(kwargs['pickled_cluster_input_file'], os.path.join(temp_job_directory,
+                                                                               constants.pickled_cluster_input_file))
+            shutil.copyfile(input_file_path, os.path.join(temp_job_directory, constants.job_input_file_name))
+
+            # Copy library scripts to working directory.
+            shutil.copyfile(constants.parameter_sweep_run_reducer_shell_script,
+                            os.path.join(temp_job_directory, os.path.basename(
+                                constants.parameter_sweep_run_reducer_shell_script)))
+            shutil.copyfile(constants.parameter_sweep_run_reducer_pyfile,
+                            os.path.join(temp_job_directory, os.path.basename(
+                                constants.parameter_sweep_run_reducer_pyfile)))
+
+            reduce_script_file = os.path.join(temp_job_directory, os.path.basename(
+                constants.parameter_sweep_run_reducer_shell_script))
+            container_name = os.path.basename(temp_job_directory)
+
+            # Invoke parameter_sweep_run_reducer.
+            subprocess.call("bash {0} {1} {2}".format(reduce_script_file, container_name, temp_job_directory),
+                            shell=True)
+
+            failed_job = self._wait_for_all_results_to_return([temp_job_directory])
+
+            if len(failed_job) > 0:
+                raise MolnsUtilException(jsonify(logs="Failed to reduce results. Job directory {0} will not be deleted."
+                                                 .format(temp_job_directory)))
+
+            with open(os.path.join(temp_job_directory, constants.job_output_file_name), "r") as of:
+                result = of.read()
+
+            # Remove job directory and container.
+            clean_up([temp_job_directory], [container_name])
+
+            return result
 
     def _ipython_generate_and_store_realisations(self, num_pchunks, pparams, param_set_ids, seed_list, pchunks,
                                                  divid=None, progress_bar=False):
@@ -873,56 +925,8 @@ class ParameterSweep(DistributedEnsemble):
         if self.cluster_execution is False:
             parameter_sweep_run_reducer(self.parameters, kwargs['reducer'], kwargs['mapped_results'])
         else:
-            import shutil
-            import subprocess
-            random_string = str(uuid.uuid4())
-            temp_job_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "tmpRed_" + random_string)
-
-            # Create temp_job_directory.
-            if not os.path.exists(temp_job_directory):
-                os.makedirs(temp_job_directory)
-
-            unpickled_inp = dict(mapped_results=kwargs['mapped_results'], parameters=self.parameters)
-
-            input_file_path = os.path.join(temp_job_directory, constants.reduce_input_file_name)
-            # Write input file
-            with open(input_file_path, "wb") as input_file:
-                cloudpickle.dump(unpickled_inp, input_file)
-
-            # Copy input files to working directory.
-            shutil.copyfile(kwargs['pickled_cluster_input_file'], os.path.join(temp_job_directory,
-                                                                               constants.pickled_cluster_input_file))
-            shutil.copyfile(input_file_path, os.path.join(temp_job_directory, constants.job_input_file_name))
-
-            # Copy library scripts to working directory.
-            shutil.copyfile(constants.parameter_sweep_run_reducer_shell_script,
-                            os.path.join(temp_job_directory, os.path.basename(
-                                constants.parameter_sweep_run_reducer_shell_script)))
-            shutil.copyfile(constants.parameter_sweep_run_reducer_pyfile,
-                            os.path.join(temp_job_directory, os.path.basename(
-                                constants.parameter_sweep_run_reducer_pyfile)))
-
-            reduce_script_file = os.path.join(temp_job_directory, os.path.basename(
-                constants.parameter_sweep_run_reducer_shell_script))
-            container_name = os.path.basename(temp_job_directory)
-
-            # Invoke parameter_sweep_run_reducer.
-            subprocess.call("bash {0} {1} {2}".format(reduce_script_file, container_name, temp_job_directory),
-                            shell=True)
-
-            failed_job = self._wait_for_all_results_to_return([temp_job_directory])
-
-            if len(failed_job) > 0:
-                raise MolnsUtilException(jsonify(logs="Failed to reduce results. Job directory {0} will not be deleted."
-                                                      .format(temp_job_directory)))
-
-            with open(os.path.join(temp_job_directory, constants.job_output_file_name), "r") as of:
-                result = of.read()
-
-            # Remove job directory and container.
-            clean_up([temp_job_directory], [container_name])
-
-            return result
+            DistributedEnsemble.run_reducer(self, pickled_cluster_input_file=kwargs['pickled_cluster_input_file'],
+                                            mapped_results=kwargs['mapped_results'])
 
 
 if __name__ == '__main__':
