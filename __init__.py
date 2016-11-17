@@ -170,7 +170,7 @@ class DistributedEnsemble:
 
     def qsub_map_aggregate_stored_realizations(self, **kwargs):
         realizations_storage_directory = kwargs['realizations_storage_directory']
-        self.result_list = os.listdir(realizations_storage_directory)
+        self.result_list = kwargs.get("result_list", self.result_list)
         number_of_trajectories = len(self.result_list)
         chunk_size = kwargs.get('chunk_size', self._determine_chunk_size(number_of_trajectories))
 
@@ -496,7 +496,6 @@ class DistributedEnsemble:
             os.makedirs(base_dir)
 
         if self.storage_mode is not constants.local_storage:
-            import json
             raise MolnsUtilException(jsonify(logs="Storage mode must be local while using qsub."))
 
         for pndx, pset, seed, pchunk in zip(param_set_ids, pparams, seed_list, pchunks):
@@ -541,7 +540,7 @@ class DistributedEnsemble:
         # Delete job containers and directories. Preserve base_dir as it contains computed realizations.
         clean_up(dirs_to_delete=remove_dirs, containers_to_delete=containers)
 
-        return jsonify(realizations_directory=base_dir)
+        return jsonify(realizations_directory=base_dir, result_list=self.result_list)
 
     @staticmethod
     def __post_process_generated_ensemble(directories, base_dir):
