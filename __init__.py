@@ -723,7 +723,7 @@ class DistributedEnsemble:
         divid = None
 
         if self.cluster_execution is False:
-            if not kwargs.get('reducer', False):
+            if not kwargs.get('reducer', False) or kwargs.get('reducer') is None:
                 reducer = builtin_reducer_default
             else:
                 reducer = kwargs['reducer']
