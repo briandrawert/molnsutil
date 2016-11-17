@@ -170,7 +170,8 @@ class DistributedEnsemble:
 
     def qsub_map_aggregate_stored_realizations(self, **kwargs):
         realizations_storage_directory = kwargs['realizations_storage_directory']
-        number_of_trajectories = len(os.listdir(realizations_storage_directory))
+        self.result_list = os.listdir(realizations_storage_directory)
+        number_of_trajectories = len(self.result_list)
         chunk_size = kwargs.get('chunk_size', self._determine_chunk_size(number_of_trajectories))
 
         self.log.write_log("Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})"
