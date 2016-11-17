@@ -169,11 +169,12 @@ class DistributedEnsemble:
         return mapped_results
 
     def qsub_map_aggregate_stored_realizations(self, **kwargs):
-        chunk_size = kwargs['chunk_size']
         realizations_storage_directory = kwargs['realizations_storage_directory']
+        number_of_trajectories = len(os.listdir(realizations_storage_directory))
+        chunk_size = kwargs.get('chunk_size', self._determine_chunk_size(number_of_trajectories))
 
         self.log.write_log("Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})"
-                           .format(self.number_of_trajectories * len(self.parameters), chunk_size))
+                           .format(number_of_trajectories * len(self.parameters), chunk_size))
 
         counter = 0
         random_string = str(uuid.uuid4())
@@ -187,12 +188,10 @@ class DistributedEnsemble:
         containers = []
 
         # chunks per parameter TODO is number_of_trajectories correct here?
-        num_chunks = int(math.ceil(self.number_of_trajectories / float(chunk_size)))
+        num_chunks = int(math.ceil(number_of_trajectories / float(chunk_size)))
         chunks = [chunk_size] * (num_chunks - 1)
-        chunks.append(self.number_of_trajectories - chunk_size * (num_chunks - 1))
+        chunks.append(number_of_trajectories - chunk_size * (num_chunks - 1))
         # total chunks
-        pchunks = chunks * len(self.parameters)
-        num_pchunks = num_chunks * len(self.parameters)
         pparams = []
         param_set_ids = []
         presult_list = []
