@@ -300,11 +300,13 @@ class DistributedEnsemble:
                 if os.path.exists(error_file):
                     with open(error_file, 'r') as ef:
                         error_msg = ef.read()
+                    import traceback
                     raise MolnsUtilException(jsonify(completed_jobs=completed_jobs,
                                                      successful_jobs=successful_jobs,
                                                      total_jobs=total_jobs,
                                                      failed_job_working_directory=directory,
-                                                     logs=error_msg, job_directories=wait_for_dirs))
+                                                     logs=error_msg, job_directories=wait_for_dirs,
+                                                     traceback=traceback.format_exc()))
 
                 elif os.path.exists(completed_file):
                     if os.path.exists(output_file):  # There could be a race condition here.
