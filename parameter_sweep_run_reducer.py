@@ -64,5 +64,6 @@ if __name__ == "__main__":
             pickle.dump(result, output)
 
     except Exception as errors:
+        import traceback
         with open(constants.job_reducer_error_file_name, "wb") as error:
-            error.write(str(errors))
+            error.write(str(errors) + "\n\n" + traceback.format_exc())
