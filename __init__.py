@@ -780,7 +780,8 @@ class DistributedEnsemble:
                                                                                  cache_results=cache_results,
                                                                                  chunk_size=chunk_size)
             else:
-                realizations_storage_directory = generated_realizations['realizations_directory']
+                import json
+                realizations_storage_directory = json.loads(generated_realizations)['realizations_directory']
                 if store_realizations_dir is not None:
                     # Copy realizations from temporary working directory to job directory.
                     realizations_storage_directory = utils.copy_generated_realizations_to_job_directory(
