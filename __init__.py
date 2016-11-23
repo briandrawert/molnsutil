@@ -927,10 +927,10 @@ class ParameterSweep(DistributedEnsemble):
     def run_reducer(self, **kwargs):
         """ Inside the run() function, apply the reducer to all of the mapped-aggregated result values. """
         if self.cluster_execution is False:
-            parameter_sweep_run_reducer(self.parameters, kwargs['reducer'], kwargs['mapped_results'])
+            return parameter_sweep_run_reducer(self.parameters, kwargs['reducer'], kwargs['mapped_results'])
         else:
-            DistributedEnsemble.run_reducer(self, pickled_cluster_input_file=kwargs['pickled_cluster_input_file'],
-                                            mapped_results=kwargs['mapped_results'])
+            return DistributedEnsemble.run_reducer(self, pickled_cluster_input_file=kwargs['pickled_cluster_input_file']
+                                                   , mapped_results=kwargs['mapped_results'])
 
 
 if __name__ == '__main__':
