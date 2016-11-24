@@ -883,7 +883,7 @@ class ParameterSweep(DistributedEnsemble):
     """ Making parameter sweeps on distributed compute systems easier. """
 
     def __init__(self, model_class=None, parameters=None, qsub=False, client=None, num_engines=None, storage_mode=None,
-                 pickled_cluster_input_file=None):
+                 pickled_cluster_input_file=None, logger=None):
         """ Constructor.
         Args:
           model_class: a class object of the model for simulation, must be a sub-class of URDMEModel
@@ -896,7 +896,7 @@ class ParameterSweep(DistributedEnsemble):
         assert parameters is not None
         if qsub is True:
             DistributedEnsemble.__init__(self, model_class, parameters, qsub=True, storage_mode=storage_mode,
-                                         pickled_cluster_input_file=pickled_cluster_input_file)
+                                         pickled_cluster_input_file=pickled_cluster_input_file, logger=logger)
             if client is not None:
                 self.log.write_log("unexpected parameter \"client\"")
             if num_engines is not None:
@@ -904,7 +904,8 @@ class ParameterSweep(DistributedEnsemble):
 
         else:
             assert model_class is not None
-            DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines, storage_mode=storage_mode)
+            DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines, storage_mode=storage_mode,
+                                         logger=logger)
 
         self.my_class_name = 'ParameterSweep'
         self.parameters = []
