@@ -6,16 +6,21 @@ import uuid
 import molns_cloudpickle as cloudpickle
 from molns_exceptions import MolnsUtilStorageException
 
+# s3.json is a JSON file that contains the following info:
+#
+#     'aws_access_key_id' : AWS access key
+#     'aws_secret_access_key' : AWS private key
+#   s3.json needs to be created and put in .molns/s3.json in the root of the home directory.
+
 
 def get_s3config():
     try:
         with open(os.environ['HOME'] + '/.molns/s3.json', 'r') as fh:
             s3config = json.loads(fh.read())
         return s3config
-    except IOError as e:
-        logging.warning("Credentials file " + os.environ[
-            'HOME'] + '/.molns/s3.json' + ' missing. You will not be able to connect to S3 or Swift. '
-                                          'Please create this file.')
+    except IOError:
+        logging.warning("Credentials file " + os.environ['HOME'] + '/.molns/s3.json'
+                        + ' missing. You will not be able to connect to S3 or Swift. Please create this file.')
         return {}
 
 

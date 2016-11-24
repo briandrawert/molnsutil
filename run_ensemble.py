@@ -95,5 +95,5 @@ if __name__ == "__main__":
         with open(constants.job_output_file_name, "wb") as output:
             molns_cloudpickle.dump(result, output)
     except Exception as errors:
-        with open(constants.job_error_file_name, "wb") as error:
+        with open(constants.job_run_ensemble_error_file_name, "wb") as error:
             error.write(str(errors))

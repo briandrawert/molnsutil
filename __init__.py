@@ -1,9 +1,9 @@
 import itertools
-import logging
 import math
 import os
 import pickle
 import uuid
+import logging
 import constants
 import molns_cloudpickle as cloudpickle
 from parameter_sweep_run_reducer import parameter_sweep_run_reducer
@@ -42,29 +42,27 @@ from utils import Log, clean_up, update_progressbar, display_progressbar, builti
   Both the class and the results return from run() must be pickle-able.
 
 """
-logging.basicConfig(filename="boto.log", level=logging.DEBUG)
 
-
-# s3.json is a JSON file that contains the following info:
-#
-#     'aws_access_key_id' : AWS access key
-#     'aws_secret_access_key' : AWS private key
-#   s3.json needs to be created and put in .molns/s3.json in the root of the home directory.
 
 class DistributedEnsemble:
     """ A class to provide an API for execution of a distributed ensemble. """
 
     def __init__(self, model_class=None, parameters=None, qsub=False, client=None, num_engines=None, storage_mode=None,
-                 pickled_cluster_input_file=None):
+                 pickled_cluster_input_file=None, logger=None):
         """ Constructor """
 
         self.my_class_name = 'DistributedEnsemble'
+        self.log = Log(logger=logger)
 
         if model_class is None and pickled_cluster_input_file is None:
+            self.log.write_log("Invalid configuration. Either provide a model class object or its pickled file.",
+                               logging.ERROR)
             raise MolnsUtilException(jsonify(
                 logs="Invalid configuration. Either provide a model class object or its pickled file."))
 
         if model_class is not None and pickled_cluster_input_file is not None:
+            self.log.write_log("Invalid configuration. Both a model class and a pickled file are provided.",
+                               logging.ERROR)
             raise MolnsUtilException(jsonify(
                 logs="Invalid configuration. Both a model class and a pickled file are provided."))
 
@@ -83,8 +81,6 @@ class DistributedEnsemble:
         self.result_list = {}
         self.qsub = qsub
 
-        self.log = Log()
-
         if self.qsub is False:
             # Set the Ipython.parallel client
             self.num_engines = num_engines
@@ -93,13 +89,9 @@ class DistributedEnsemble:
     # --------------------------
     def save_state(self, name):
         """ Serialize the state of the ensemble, for persistence beyond memory."""
-        state = {}
-        state['model_class'] = self.model_class
-        state['parameters'] = self.parameters
-        state['number_of_trajectories'] = self.number_of_trajectories
-        state['seed_base'] = self.seed_base
-        state['result_list'] = self.result_list
-        state['storage_mode'] = self.storage_mode
+        state = {'model_class': self.model_class, 'parameters': self.parameters,
+                 'number_of_trajectories': self.number_of_trajectories, 'seed_base': self.seed_base,
+                 'result_list': self.result_list, 'storage_mode': self.storage_mode}
         if not os.path.isdir('.molnsutil'):
             os.makedirs('.molnsutil')
         with open('.molnsutil/{1}-{0}'.format(name, self.my_class_name)) as fd:
@@ -110,6 +102,7 @@ class DistributedEnsemble:
         with open('.molnsutil/{1}-{0}'.format(name, self.my_class_name)) as fd:
             state = pickle.load(fd)
         if state['model_class'] is not self.model_class:
+            self.log.write_log("Can only load state of a class that is identical to the original class", logging.ERROR)
             raise MolnsUtilException("Can only load state of a class that is identical to the original class")
         self.parameters = state['parameters']
         self.number_of_trajectories = state['number_of_trajectories']
@@ -122,6 +115,8 @@ class DistributedEnsemble:
         if not isinstance(pparams, list) or not isinstance(param_set_ids, list) or \
                 (presult_list is not None and not isinstance(presult_list, list)) or \
                 (presult_list is not None and chunk_size is None):
+            self.log.write_log("Unexpected arguments. Require pparams, param_set_ids (and presult_list) to be of type "
+                               "list. chunk_size cannot be None if presult_list is not None.", logging.ERROR)
             raise MolnsUtilException(jsonify(
                 logs="Unexpected arguments. Require pparams, param_set_ids (and presult_list) to be of type list. "
                      "chunk_size cannot be None if presult_list is not None."))
@@ -144,9 +139,8 @@ class DistributedEnsemble:
     def _ipython_map_aggregate_stored_realizations(self, mapper, aggregator=None, cache_results=False, divid=None,
                                                    chunk_size=None):
 
-        self.log.write_log(
-            "Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})".format(
-                self.number_of_trajectories * len(self.parameters), chunk_size))
+        self.log.write_log("Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})"
+                           .format(self.number_of_trajectories * len(self.parameters), chunk_size))
 
         # chunks per parameter
         num_chunks = int(math.ceil(self.number_of_trajectories / float(chunk_size)))
@@ -181,6 +175,7 @@ class DistributedEnsemble:
         counter = 0
         random_string = str(uuid.uuid4())
         if not os.path.isdir(realizations_storage_directory):
+            self.log.write_log("Directory {0} does not exist.".format(realizations_storage_directory), logging.ERROR)
             raise MolnsUtilException(jsonify(logs="Directory {0} does not exist."
                                              .format(realizations_storage_directory)))
 
@@ -230,7 +225,7 @@ class DistributedEnsemble:
         mapped_results = {}
         self._set_qsub_mapped_results(remove_dirs, mapped_results)
 
-        self.log.write_log("Cleaning up..")
+        self.log.write_log("Cleaning up job directory {0}".format(base_dir))
 
         # remove temporary files and finished containers. Keep all files that record errors.
         dirs_to_delete = remove_dirs
@@ -245,9 +240,8 @@ class DistributedEnsemble:
                                             aggregator=None):
 
         # If we don't store the realizations (or use the stored ones)
-        self.log.write_log(
-            "Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})".format(
-                number_of_trajectories, chunk_size))
+        self.log.write_log("Generating {0} realizations of the model, running mapper & aggregator (chunk size={1})"
+                           .format(number_of_trajectories, chunk_size))
 
         # chunks per parameter
         num_chunks = int(math.ceil(number_of_trajectories / float(chunk_size)))
@@ -284,13 +278,15 @@ class DistributedEnsemble:
         keep_dirs = []
         total_jobs = len(dirs)
 
-        self.log.write_log("Awaiting all results...")
+        self.log.write_log("Awaiting all results. Job directories:\n{0}".format(wait_for_dirs))
 
         while len(dirs) > 0:
             for directory in dirs:
                 output_file = os.path.join(directory, constants.job_output_file_name)
                 completed_file = os.path.join(directory, constants.job_complete_file_name)
-                error_file = os.path.join(directory, constants.job_error_file_name)
+                error_file_map_aggregate = os.path.join(directory, constants.job_error_file_name)
+                error_file_run_ensemble = os.path.join(directory, constants.job_run_ensemble_error_file_name)
+                error_file_reducer = os.path.join(directory, constants.job_reducer_error_file_name)
 
                 if os.path.exists(output_file):
                     dirs.remove(directory)
@@ -298,16 +294,35 @@ class DistributedEnsemble:
                     completed_jobs += 1
                     self.log.write_log("{0} exists".format(output_file))
 
-                if os.path.exists(error_file):
-                    with open(error_file, 'r') as ef:
+                if os.path.exists(error_file_map_aggregate):
+                    with open(error_file_map_aggregate, 'r') as ef:
                         error_msg = ef.read()
-                    import traceback
+                    self.log.write_log("MAP-AGGREGATE ERROR\n" + error_msg, logging.ERROR)
                     raise MolnsUtilException(jsonify(completed_jobs=completed_jobs,
                                                      successful_jobs=successful_jobs,
                                                      total_jobs=total_jobs,
                                                      failed_job_working_directory=directory,
-                                                     logs=error_msg, job_directories=wait_for_dirs,
-                                                     traceback=traceback.format_exc()))
+                                                     logs=error_msg, job_directories=wait_for_dirs))
+
+                elif os.path.exists(error_file_reducer):
+                    with open(error_file_reducer, 'r') as ef:
+                        error_msg = ef.read()
+                    self.log.write_log("REDUCER ERROR\n" + error_msg, logging.ERROR)
+                    raise MolnsUtilException(jsonify(completed_jobs=completed_jobs,
+                                                     successful_jobs=successful_jobs,
+                                                     total_jobs=total_jobs,
+                                                     failed_job_working_directory=directory,
+                                                     logs=error_msg, job_directories=wait_for_dirs))
+
+                elif os.path.exists(error_file_run_ensemble):
+                    with open(error_file_run_ensemble, 'r') as ef:
+                        error_msg = ef.read()
+                    self.log.write_log("RUN-ENSEMBLE ERROR\n" + error_msg, logging.ERROR)
+                    raise MolnsUtilException(jsonify(completed_jobs=completed_jobs,
+                                                     successful_jobs=successful_jobs,
+                                                     total_jobs=total_jobs,
+                                                     failed_job_working_directory=directory,
+                                                     logs=error_msg, job_directories=wait_for_dirs))
 
                 elif os.path.exists(completed_file):
                     if os.path.exists(output_file):  # There could be a race condition here.
@@ -318,20 +333,22 @@ class DistributedEnsemble:
 
                 else:
                     self.log.write_log("{0} does not exist".format(completed_file))
+
                 if divid is not None and progress_bar is True:
                     update_progressbar(divid, completed_jobs, total_jobs)
             time.sleep(1)
             timer_current = time.time()
             if timer_current - timer_start > constants.MaxJobTimeInSeconds:
+                self.log.write_log("Job timed out. Time out period is {0} seconds."
+                                   .format(constants.MaxJobTimeInSeconds), logging.ERROR)
                 raise MolnsUtilException(jsonify(completed_jobs=completed_jobs,
                                                  successful_jobs=successful_jobs,
                                                  total_jobs=total_jobs,
                                                  logs="Job timed out.", job_directories=wait_for_dirs))
 
         if completed_jobs > successful_jobs:
-            self.log.write_log(
-                "{0} job(s) did not complete successfully. Their working directories will not be deleted."
-                    .format(completed_jobs - successful_jobs))
+            self.log.write_log("{0} job(s) did not complete successfully. Their working directories will not be "
+                               "deleted.".format(completed_jobs - successful_jobs), logging.ERROR)
 
         return keep_dirs
 
@@ -446,7 +463,7 @@ class DistributedEnsemble:
         mapped_results = {}
         self._set_qsub_mapped_results(remove_dirs, mapped_results)
 
-        self.log.write_log("Cleaning up..")
+        self.log.write_log("Cleaning up. Job directory: {0}".format(base_dir))
 
         # remove temporary files and finished containers. Keep all files that record errors.
         dirs_to_delete = remove_dirs
@@ -501,11 +518,7 @@ class DistributedEnsemble:
             subprocess.call("bash {0} {1} {2}".format(reduce_script_file, container_name, temp_job_directory),
                             shell=True)
 
-            failed_job = self._wait_for_all_results_to_return([temp_job_directory])
-
-            if len(failed_job) > 0:
-                raise MolnsUtilException(jsonify(logs="Failed to reduce results. Job directory {0} will not be deleted."
-                                                 .format(temp_job_directory)))
+            self._wait_for_all_results_to_return([temp_job_directory])
 
             with open(os.path.join(temp_job_directory, constants.job_output_file_name), "r") as of:
                 result = of.read()
@@ -551,6 +564,7 @@ class DistributedEnsemble:
             os.makedirs(base_dir)
 
         if self.storage_mode is not constants.local_storage:
+            self.log.write_log("Storage mode must be local while using qsub.", logging.ERROR)
             raise MolnsUtilException(jsonify(logs="Storage mode must be local while using qsub."))
 
         for pndx, pset, seed, pchunk in zip(param_set_ids, pparams, seed_list, pchunks):
@@ -587,7 +601,7 @@ class DistributedEnsemble:
                 self.result_list[param_set_id] = []
             self.result_list[param_set_id].extend(r)
 
-        self.log.write_log("Cleaning up..")
+        self.log.write_log("Cleaning up. Job directory: {0}".format(base_dir))
 
         # Arrange for generated files to be available in a known location - base_dir.
         DistributedEnsemble.__post_process_generated_ensemble(remove_dirs, base_dir)
@@ -612,8 +626,11 @@ class DistributedEnsemble:
         """ Add a number of realizations to the ensemble. """
 
         if number_of_trajectories is None:
+            self.log.write_log("No number_of_trajectories specified", logging.ERROR)
             raise MolnsUtilException(jsonify(logs="No number_of_trajectories specified"))
         if type(number_of_trajectories) is not int:
+            self.log.write_log("number_of_trajectories must be an integer. Provided type: {0}"
+                               .format(type(number_of_trajectories)), logging.ERROR)
             raise MolnsUtilException(jsonify(
                 logs="number_of_trajectories must be an integer. Provided type: {0}".format(
                     type(number_of_trajectories))))
