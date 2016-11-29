@@ -165,7 +165,7 @@ def jsonify(**kwargs):
 
 
 class Log:
-    def __init__(self, log_filename="molnsutil-logs", verbose=True):
+    def __init__(self, log_filename="molnsutil.logs", verbose=True):
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
 
@@ -177,8 +177,15 @@ class Log:
             handler.setFormatter(formatter)
             logger.addHandler(handler)
 
+        # create info file handler and set level to info
+        handler = logging.FileHandler(log_filename + ".info", "w")
+        handler.setLevel(logging.INFO)
+        formatter = logging.Formatter("%(levelname)s - %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
         # create debug file handler and set level to debug
-        handler = logging.FileHandler(log_filename, "w")
+        handler = logging.FileHandler(log_filename + ".debug", "w")
         handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter("%(levelname)s - %(message)s")
         handler.setFormatter(formatter)
