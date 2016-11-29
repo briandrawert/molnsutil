@@ -185,7 +185,7 @@ class Log:
         logger.addHandler(handler)
 
         # create debug file handler and set level to debug
-        handler = logging.FileHandler("debug." + log_filename, "w")
+        handler = logging.FileHandler(log_filename + ".debug", "w")
         handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter("%(levelname)s - %(message)s")
         handler.setFormatter(formatter)
