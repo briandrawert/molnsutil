@@ -166,6 +166,7 @@ def jsonify(**kwargs):
 
 class Log:
     def __init__(self, log_filename="molnsutil.logs", verbose=True):
+        self.verbose = verbose
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
 
