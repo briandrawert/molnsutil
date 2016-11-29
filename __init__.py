@@ -889,7 +889,8 @@ class ParameterSweep(DistributedEnsemble):
               e.g.: {'arg1':[1,2,3],'arg2':[1,2,3]}  will produce 9 parameter points.
             If it is a list, where each element of the list is a dict
             """
-        assert parameters is not None
+        if parameters is None:
+            raise MolnsUtilException("Parameters cannot be none.")
         if qsub is True:
             DistributedEnsemble.__init__(self, model_class, parameters, qsub=True, storage_mode=storage_mode,
                                          pickled_cluster_input_file=pickled_cluster_input_file,
