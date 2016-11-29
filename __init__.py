@@ -48,11 +48,13 @@ class DistributedEnsemble:
     """ A class to provide an API for execution of a distributed ensemble. """
 
     def __init__(self, model_class=None, parameters=None, qsub=False, client=None, num_engines=None, storage_mode=None,
-                 pickled_cluster_input_file=None, logger=None):
+                 pickled_cluster_input_file=None, log_filename=None):
         """ Constructor """
 
         self.my_class_name = 'DistributedEnsemble'
-        self.log = Log(logger=logger)
+        self.log = Log(log_filename=log_filename)
+
+        self.log.write_log("*************This is a test message from molnsutil.******************************")
 
         if model_class is None and pickled_cluster_input_file is None:
             self.log.write_log("Invalid configuration. Either provide a model class object or its pickled file.",
@@ -883,7 +885,7 @@ class ParameterSweep(DistributedEnsemble):
     """ Making parameter sweeps on distributed compute systems easier. """
 
     def __init__(self, model_class=None, parameters=None, qsub=False, client=None, num_engines=None, storage_mode=None,
-                 pickled_cluster_input_file=None, logger=None):
+                 pickled_cluster_input_file=None, log_filename=None):
         """ Constructor.
         Args:
           model_class: a class object of the model for simulation, must be a sub-class of URDMEModel
@@ -896,7 +898,8 @@ class ParameterSweep(DistributedEnsemble):
         assert parameters is not None
         if qsub is True:
             DistributedEnsemble.__init__(self, model_class, parameters, qsub=True, storage_mode=storage_mode,
-                                         pickled_cluster_input_file=pickled_cluster_input_file, logger=logger)
+                                         pickled_cluster_input_file=pickled_cluster_input_file,
+                                         log_filename=log_filename)
             if client is not None:
                 self.log.write_log("unexpected parameter \"client\"")
             if num_engines is not None:
@@ -905,7 +908,7 @@ class ParameterSweep(DistributedEnsemble):
         else:
             assert model_class is not None
             DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines, storage_mode=storage_mode,
-                                         logger=logger)
+                                         log_filename=log_filename)
 
         self.my_class_name = 'ParameterSweep'
         self.parameters = []

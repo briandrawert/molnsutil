@@ -165,22 +165,41 @@ def jsonify(**kwargs):
 
 
 class Log:
-    def __init__(self, logger=None, verbose=True):
-        self.verbose = verbose
-        self.logger = logger
+    def __init__(self, log_filename="molnsutil-logs", verbose=True):
+        logger = logging.getLogger()
+        logger.setLevel(logging.DEBUG)
 
-    def write_log(self, message, level=None):
-        if self.verbose:
-            print message
+        if verbose:
+            # create console handler and set level to info
+            handler = logging.StreamHandler()
+            handler.setLevel(logging.INFO)
+            formatter = logging.Formatter("%(levelname)s - %(message)s")
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
 
-        if self.logger is not None:
-            if level is logging.DEBUG:
-                self.logger.debug(message)
-            elif level is logging.ERROR:
-                self.logger.error(message)
-            elif level is logging.WARNING:
-                self.logger.warning(message)
-            elif level is logging.CRITICAL:
-                self.logger.critical(message)
-            else:
-                self.logger.info(message)
+        # create error file handler and set level to error
+        handler = logging.FileHandler(log_filename, "w", encoding=None, delay="true")
+        handler.setLevel(logging.ERROR)
+        formatter = logging.Formatter("%(levelname)s - %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
+        # create debug file handler and set level to debug
+        handler = logging.FileHandler(log_filename + "all.log", "w")
+        handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter("%(levelname)s - %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
+    @staticmethod
+    def write_log(message, level=None):
+        if level is logging.DEBUG:
+            logging.debug(message)
+        elif level is logging.ERROR:
+            logging.error(message)
+        elif level is logging.WARNING:
+            logging.warning(message)
+        elif level is logging.CRITICAL:
+            logging.critical(message)
+        else:
+            logging.info(message)
