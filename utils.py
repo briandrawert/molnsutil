@@ -202,4 +202,4 @@ class Log:
         elif level is logging.CRITICAL:
             logging.critical(message)
         else:
-            logging.DEBUG(message)
+            logging.debug(message)
