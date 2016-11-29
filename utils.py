@@ -177,15 +177,15 @@ class Log:
             handler.setFormatter(formatter)
             logger.addHandler(handler)
 
-        # create error file handler and set level to error
-        handler = logging.FileHandler(log_filename, "w", encoding=None, delay="true")
-        handler.setLevel(logging.ERROR)
+        # create info file handler and set level to info
+        handler = logging.FileHandler(log_filename, "w")
+        handler.setLevel(logging.INFO)
         formatter = logging.Formatter("%(levelname)s - %(message)s")
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
         # create debug file handler and set level to debug
-        handler = logging.FileHandler(log_filename + "all.log", "w")
+        handler = logging.FileHandler("debug." + log_filename, "w")
         handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter("%(levelname)s - %(message)s")
         handler.setFormatter(formatter)
@@ -193,8 +193,8 @@ class Log:
 
     @staticmethod
     def write_log(message, level=None):
-        if level is logging.DEBUG:
-            logging.debug(message)
+        if level is logging.INFO:
+            logging.info(message)
         elif level is logging.ERROR:
             logging.error(message)
         elif level is logging.WARNING:
@@ -202,4 +202,4 @@ class Log:
         elif level is logging.CRITICAL:
             logging.critical(message)
         else:
-            logging.info(message)
+            logging.DEBUG(message)

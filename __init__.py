@@ -54,8 +54,6 @@ class DistributedEnsemble:
         self.my_class_name = 'DistributedEnsemble'
         self.log = Log(log_filename=log_filename)
 
-        self.log.write_log("*************This is a test message from molnsutil.******************************")
-
         if model_class is None and pickled_cluster_input_file is None:
             self.log.write_log("Invalid configuration. Either provide a model class object or its pickled file.",
                                logging.ERROR)
