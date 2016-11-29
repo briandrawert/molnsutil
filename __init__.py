@@ -292,12 +292,11 @@ class DistributedEnsemble:
                     dirs.remove(directory)
                     successful_jobs += 1
                     completed_jobs += 1
-                    self.log.write_log("{0} exists".format(output_file))
 
                 if os.path.exists(error_file_map_aggregate):
                     with open(error_file_map_aggregate, 'r') as ef:
                         error_msg = ef.read()
-                    self.log.write_log("MAP-AGGREGATE ERROR\n" + error_msg, logging.ERROR)
+                    self.log.write_log(error_msg, logging.ERROR)
                     raise MolnsUtilException(jsonify(completed_jobs=completed_jobs,
                                                      successful_jobs=successful_jobs,
                                                      total_jobs=total_jobs,
@@ -307,7 +306,7 @@ class DistributedEnsemble:
                 elif os.path.exists(error_file_reducer):
                     with open(error_file_reducer, 'r') as ef:
                         error_msg = ef.read()
-                    self.log.write_log("REDUCER ERROR\n" + error_msg, logging.ERROR)
+                    self.log.write_log(error_msg, logging.ERROR)
                     raise MolnsUtilException(jsonify(completed_jobs=completed_jobs,
                                                      successful_jobs=successful_jobs,
                                                      total_jobs=total_jobs,
@@ -317,7 +316,7 @@ class DistributedEnsemble:
                 elif os.path.exists(error_file_run_ensemble):
                     with open(error_file_run_ensemble, 'r') as ef:
                         error_msg = ef.read()
-                    self.log.write_log("RUN-ENSEMBLE ERROR\n" + error_msg, logging.ERROR)
+                    self.log.write_log(error_msg, logging.ERROR)
                     raise MolnsUtilException(jsonify(completed_jobs=completed_jobs,
                                                      successful_jobs=successful_jobs,
                                                      total_jobs=total_jobs,
@@ -330,9 +329,6 @@ class DistributedEnsemble:
                     keep_dirs.append(directory)
                     dirs.remove(directory)
                     completed_jobs += 1
-
-                else:
-                    self.log.write_log("{0} does not exist".format(completed_file))
 
                 if divid is not None and progress_bar is True:
                     update_progressbar(divid, completed_jobs, total_jobs)
@@ -347,8 +343,8 @@ class DistributedEnsemble:
                                                  logs="Job timed out.", job_directories=wait_for_dirs))
 
         if completed_jobs > successful_jobs:
-            self.log.write_log("{0} job(s) did not complete successfully. Their working directories will not be "
-                               "deleted.".format(completed_jobs - successful_jobs), logging.ERROR)
+            self.log.write_log("Jobs did not complete successfully. Their working directories will not be deleted.",
+                               logging.ERROR)
 
         return keep_dirs
 
