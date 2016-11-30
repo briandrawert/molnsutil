@@ -57,14 +57,12 @@ class DistributedEnsemble:
         if model_class is None and pickled_cluster_input_file is None:
             self.log.write_log("Invalid configuration. Either provide a model class object or its pickled file.",
                                logging.ERROR)
-            raise MolnsUtilException(jsonify(
-                logs="Invalid configuration. Either provide a model class object or its pickled file."))
+            raise MolnsUtilException("Invalid configuration. Either provide a model class object or its pickled file.")
 
         if model_class is not None and pickled_cluster_input_file is not None:
             self.log.write_log("Invalid configuration. Both a model class and a pickled file are provided.",
                                logging.ERROR)
-            raise MolnsUtilException(jsonify(
-                logs="Invalid configuration. Both a model class and a pickled file are provided."))
+            raise MolnsUtilException("Invalid configuration. Both a model class and a pickled file are provided.")
 
         if model_class is not None:
             self.cluster_execution = False
@@ -73,6 +71,7 @@ class DistributedEnsemble:
             self.cluster_execution = True
             self.pickled_cluster_input_file = pickled_cluster_input_file
 
+        # Not checking here for parameters = None, as they could be present in the model class.
         self.parameters = [parameters]
         self.number_of_trajectories = 0
         self.seed_base = generate_seed_base()
@@ -117,9 +116,8 @@ class DistributedEnsemble:
                 (presult_list is not None and chunk_size is None):
             self.log.write_log("Unexpected arguments. Require pparams, param_set_ids (and presult_list) to be of type "
                                "list. chunk_size cannot be None if presult_list is not None.", logging.ERROR)
-            raise MolnsUtilException(jsonify(
-                logs="Unexpected arguments. Require pparams, param_set_ids (and presult_list) to be of type list. "
-                     "chunk_size cannot be None if presult_list is not None."))
+            raise MolnsUtilException("Unexpected arguments. Require pparams, param_set_ids (and presult_list) to be of "
+                                     "type list. chunk_size cannot be None if presult_list is not None.")
 
         for ide, param in enumerate(self.parameters):
             param_set_ids.extend([ide] * num_chunks)
@@ -169,6 +167,8 @@ class DistributedEnsemble:
             else len(self.result_list)
         chunk_size = kwargs.get('chunk_size', self._determine_chunk_size(number_of_trajectories))
 
+        if self.parameters is None:
+            raise MolnsUtilException("self.parameters is None. I don't know (yet) how to proceed.")
         self.log.write_log("Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})"
                            .format(number_of_trajectories * len(self.parameters), chunk_size))
 
@@ -176,8 +176,7 @@ class DistributedEnsemble:
         random_string = str(uuid.uuid4())
         if not os.path.isdir(realizations_storage_directory):
             self.log.write_log("Directory {0} does not exist.".format(realizations_storage_directory), logging.ERROR)
-            raise MolnsUtilException(jsonify(logs="Directory {0} does not exist."
-                                             .format(realizations_storage_directory)))
+            raise MolnsUtilException("Directory {0} does not exist.".format(realizations_storage_directory))
 
         base_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "temp_" + random_string)
         job_name_prefix = "ps_job_" + random_string[:8] + "_"
@@ -185,6 +184,7 @@ class DistributedEnsemble:
         containers = []
 
         # chunks per parameter TODO is number_of_trajectories correct here?
+        self.log.write_log("Number of trajectories: {0}".format(number_of_trajectories))
         num_chunks = int(math.ceil(number_of_trajectories / float(chunk_size)))
         chunks = [chunk_size] * (num_chunks - 1)
         chunks.append(number_of_trajectories - chunk_size * (num_chunks - 1))
@@ -901,8 +901,8 @@ class ParameterSweep(DistributedEnsemble):
                 self.log.write_log("unexpected parameter \"num_engines\"")
 
         else:
-	    if model_class is None:
-	        raise MolnsUtilException("Model class is None.")    
+            if model_class is None:
+                raise MolnsUtilException("Model class is None.")
 
             DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines, storage_mode=storage_mode,
                                          log_filename=log_filename)
@@ -931,7 +931,7 @@ class ParameterSweep(DistributedEnsemble):
         elif type(parameters) is list:
             self.parameters = parameters
         else:
-            raise MolnsUtilException(jsonify(logs="parameters must be a dict."))
+            raise MolnsUtilException("parameters must be a dict.")
 
     def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
