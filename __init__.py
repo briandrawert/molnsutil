@@ -931,7 +931,7 @@ class ParameterSweep(DistributedEnsemble):
         elif type(parameters) is list:
             self.parameters = parameters
         else:
-            raise MolnsUtilException("parameters must be a dict.")
+            raise MolnsUtilException("Parameters must be a dict or list.")
 
     def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
