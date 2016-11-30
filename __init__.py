@@ -118,6 +118,8 @@ class DistributedEnsemble:
                                "list. chunk_size cannot be None if presult_list is not None.", logging.ERROR)
             raise MolnsUtilException("Unexpected arguments. Require pparams, param_set_ids (and presult_list) to be of "
                                      "type list. chunk_size cannot be None if presult_list is not None.")
+        if self.parameters is None:
+            raise MolnsUtilException("self.parameters is None. I don't know (yet) how to proceed.")
 
         for ide, param in enumerate(self.parameters):
             param_set_ids.extend([ide] * num_chunks)
@@ -561,7 +563,7 @@ class DistributedEnsemble:
 
         if self.storage_mode is not constants.local_storage:
             self.log.write_log("Storage mode must be local while using qsub.", logging.ERROR)
-            raise MolnsUtilException(jsonify(logs="Storage mode must be local while using qsub."))
+            raise MolnsUtilException("Storage mode must be local while using qsub.")
 
         for pndx, pset, seed, pchunk in zip(param_set_ids, pparams, seed_list, pchunks):
             if self.cluster_execution is True:
@@ -623,13 +625,12 @@ class DistributedEnsemble:
 
         if number_of_trajectories is None:
             self.log.write_log("No number_of_trajectories specified", logging.ERROR)
-            raise MolnsUtilException(jsonify(logs="No number_of_trajectories specified"))
+            raise MolnsUtilException("No number_of_trajectories specified")
         if type(number_of_trajectories) is not int:
             self.log.write_log("number_of_trajectories must be an integer. Provided type: {0}"
                                .format(type(number_of_trajectories)), logging.ERROR)
-            raise MolnsUtilException(jsonify(
-                logs="number_of_trajectories must be an integer. Provided type: {0}".format(
-                    type(number_of_trajectories))))
+            raise MolnsUtilException("number_of_trajectories must be an integer. Provided type: {0}".format(
+                    type(number_of_trajectories)))
 
         if chunk_size is None:
             chunk_size = self._determine_chunk_size(number_of_trajectories)
