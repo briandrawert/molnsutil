@@ -891,7 +891,8 @@ class ParameterSweep(DistributedEnsemble):
             If it is a list, where each element of the list is a dict
             """
         if parameters is None:
-            raise MolnsUtilException("Parameters cannot be none.")
+            self.log.write_log("Parameters is none.", level=logging.WARNING)
+            logging.warning("Parameters is None. THIS IS USING LOGGING")
         if qsub is True:
             DistributedEnsemble.__init__(self, model_class, parameters, qsub=True, storage_mode=storage_mode,
                                          pickled_cluster_input_file=pickled_cluster_input_file,
