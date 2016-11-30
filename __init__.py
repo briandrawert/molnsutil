@@ -901,7 +901,9 @@ class ParameterSweep(DistributedEnsemble):
                 self.log.write_log("unexpected parameter \"num_engines\"")
 
         else:
-            assert model_class is not None
+	    if model_class is None:
+	        raise MolnsUtilException("Model class is None.")    
+
             DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines, storage_mode=storage_mode,
                                          log_filename=log_filename)
 
