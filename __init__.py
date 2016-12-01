@@ -79,10 +79,10 @@ class DistributedEnsemble:
         # A chunk list
         self.result_list = {}
         self.qsub = qsub
+        self.num_engines = num_engines
 
         if self.qsub is False:
             # Set the Ipython.parallel client
-            self.num_engines = num_engines
             self._update_client(client)
 
     # --------------------------
@@ -171,6 +171,7 @@ class DistributedEnsemble:
 
         if self.parameters is None:
             raise MolnsUtilException("self.parameters is None. I don't know (yet) how to proceed.")
+
         self.log.write_log("Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})"
                            .format(number_of_trajectories * len(self.parameters), chunk_size))
 
@@ -695,7 +696,8 @@ class DistributedEnsemble:
 
     def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
-        if self.qsub:
+        if self.num_engines is None:
+            self.log.write_log("self.num_engines is None, returning chunk_size = 1")
             return 1
         return int(max(1, round(number_of_trajectories / float(self.num_engines))))
 
@@ -894,18 +896,16 @@ class ParameterSweep(DistributedEnsemble):
         if qsub is True:
             DistributedEnsemble.__init__(self, model_class, parameters, qsub=True, storage_mode=storage_mode,
                                          pickled_cluster_input_file=pickled_cluster_input_file,
-                                         log_filename=log_filename)
+                                         log_filename=log_filename, num_engines=num_engines)
             if client is not None:
                 self.log.write_log("unexpected parameter \"client\"")
-            if num_engines is not None:
-                self.log.write_log("unexpected parameter \"num_engines\"")
 
         else:
             if model_class is None:
                 raise MolnsUtilException("Model class is None.")
 
-            DistributedEnsemble.__init__(self, model_class, parameters, client, num_engines, storage_mode=storage_mode,
-                                         log_filename=log_filename)
+            DistributedEnsemble.__init__(self, model_class, parameters, client=client, num_engines=num_engines,
+                                         storage_mode=storage_mode, log_filename=log_filename)
 
         self.my_class_name = 'ParameterSweep'
         self.parameters = []
@@ -935,7 +935,8 @@ class ParameterSweep(DistributedEnsemble):
 
     def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
-        if self.qsub:
+        if self.num_engines is None:
+            self.log.write_log("self.num_engines is None, returning chunk_size = 1")
             return 1
         num_params = len(self.parameters)
         if num_params >= self.num_engines:
