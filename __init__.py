@@ -897,10 +897,12 @@ class ParameterSweep(DistributedEnsemble):
             """
 
         if qsub is True:
-            self.log.write_log("Parameter sweep on cluster.", level=logging.INFO)
             DistributedEnsemble.__init__(self, model_class, parameters, qsub=True, storage_mode=storage_mode,
                                          pickled_cluster_input_file=pickled_cluster_input_file,
                                          log_filename=log_filename, num_engines=num_engines)
+
+            self.log.write_log("Parameter sweep on cluster.", level=logging.INFO)
+
             if client is not None:
                 self.log.write_log("unexpected parameter \"client\"")
 
