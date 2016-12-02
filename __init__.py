@@ -698,7 +698,7 @@ class DistributedEnsemble:
         """ Determine a optimal chunk size. """
         self.log.write_log("self.num_engines = {0}, type(self.num_engines) = {1}".format(self.num_engines,
                                                                                          type(self.num_engines)))
-        if self.num_engines is None:
+        if self.num_engines is None or self.num_engines is 'None':
             self.log.write_log("self.num_engines is None, returning chunk_size = 1")
             return 1
         return int(max(1, round(number_of_trajectories / float(self.num_engines))))
@@ -937,9 +937,7 @@ class ParameterSweep(DistributedEnsemble):
 
     def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
-        self.log.write_log("self.num_engines = {0}, type(self.num_engines) = {1}".format(self.num_engines,
-                                                                                         type(self.num_engines)))
-        if self.num_engines is None:
+        if self.num_engines is None or self.num_engines is 'None':
             self.log.write_log("self.num_engines is None, returning chunk_size = 1")
             return 1
         num_params = len(self.parameters)
