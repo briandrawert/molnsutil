@@ -86,19 +86,18 @@ def get_persisistent_storage_config():
 class LocalStorage():
     """ This class provides an abstraction for storing and reading objects on/from
         the ephemeral storage. """
-    import molnsutil.molns_cloudpickle as cp
-
+    
 
     def __init__(self, folder_name="/home/ubuntu/localarea"):
         self.folder_name = folder_name
 
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
-            cp.dump(data,fh)
+            cloudpickle.dump(data,fh)
 
     def get(self, filename):
         with open(self.folder_name+"/"+filename, 'rb') as fh:
-            data = cp.load(fh)
+            data = cloudpickle.load(fh)
         return data
 
     def delete(self,filename):
@@ -107,7 +106,6 @@ class LocalStorage():
 class SharedStorage():
     """ This class provides an abstraction for storing and reading objects on/from
         the sshfs mounted storage on the controller. """
-    import molnsutil.molns_cloudpickle as cp
 
     def __init__(self, serialization_method="cloudpickle"):
         self.folder_name = "/home/ubuntu/shared"
@@ -116,14 +114,14 @@ class SharedStorage():
     def put(self, filename, data):
         with open(self.folder_name+"/"+filename,'wb') as fh:
             if self.serialization_method == "cloudpickle":
-                cp.dump(data,fh)
+                cloudpickle.dump(data,fh)
             elif self.serialization_method == "json":
                 json.dump(data,fh)
 
     def get(self, filename):
         with open(self.folder_name+"/"+filename, 'rb') as fh:
             if self.serialization_method == "cloudpickle":
-                data = cp.loads(fh.read())
+                data = cloudpickle.loads(fh.read())
             elif self.serialization_method == "json":
                 data = json.loads(fh.read())
         return data
@@ -258,8 +256,6 @@ class PersistentStorage():
        Provides an abstaction for interacting with the Object Stores
        of the supported clouds.
     """
-    import molnsutil.molns_cloudpickle as cp
-
 
     def __init__(self, bucket_name=None):
         s3config = get_persisistent_storage_config()
@@ -312,11 +308,11 @@ class PersistentStorage():
 
     def put(self, name, data):
         self.setup_provider()
-        self.provider.put(name, cp.dumps(data))
+        self.provider.put(name, cloudpickle.dumps(data))
 
     def get(self, name, validate=False):
         self.setup_provider()
-        return cp.loads(self.provider.get(name, validate))
+        return cloudpickle.loads(self.provider.get(name, validate))
 
     def delete(self, name):
         """ Delete an object. """
@@ -335,8 +331,6 @@ class PersistentStorage():
 
 
 class CachedPersistentStorage(PersistentStorage):
-    import molnsutil.molns_cloudpickle as cp
-    
     def __init__(self, bucket_name=None):
         PersistentStorage.__init__(self,bucket_name)
         self.cache = LocalStorage(folder_name = "/mnt/molnsarea/cache")
@@ -345,9 +339,9 @@ class CachedPersistentStorage(PersistentStorage):
         self.setup_provider()
         # Try to read it form cache
         try:
-            data = cp.loads(self.cache.get(name))
+            data = cloudpickle.loads(self.cache.get(name))
         except: # if not there, read it from the Object Store and write it to the cache
-            data = cp.loads(self.provider.get(name, validate))
+            data = cloudpickle.loads(self.provider.get(name, validate))
             try:
                 self.cache.put(name, data)
             except:
