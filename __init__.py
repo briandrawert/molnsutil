@@ -170,7 +170,7 @@ class DistributedEnsemble:
         chunk_size = kwargs.get('chunk_size', self._determine_chunk_size(number_of_trajectories))
 
         if self.parameters is None:
-            raise MolnsUtilException("self.parameters is None. I don't know (yet) how to proceed.")
+            raise MolnsUtilException("self.parameters is None. I don't know how to proceed.")
 
         self.log.write_log("Running mapper & aggregator on the result objects (number of results={0}, chunk size={1})"
                            .format(number_of_trajectories * len(self.parameters), chunk_size))
@@ -937,7 +937,9 @@ class ParameterSweep(DistributedEnsemble):
         elif type(parameters) is list:
             self.parameters = parameters
         else:
-            raise MolnsUtilException("Parameters must be a dict or list.")
+            #  TODO verify that this can be done safely.
+            self.parameters = [None]
+            #  raise MolnsUtilException("Parameters must be a dict or list.")
 
     def _determine_chunk_size(self, number_of_trajectories):
         """ Determine a optimal chunk size. """
