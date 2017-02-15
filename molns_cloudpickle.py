@@ -101,17 +101,22 @@ useForcedImports = True  # Should I use forced imports for tracking?
 
 def error_msg(msg, loglevel=logging.WARN, exc_info=0):
     """Print an error message to pilog if running on cloud; otherwise send to stderr"""
-    from .. import _getcloud
-    roc = _getcloud().running_on_cloud()
-    if roc:
-        pilog_module = __import__('pimployee.log', fromlist=['log'])
-        pilog_module.pilogger.log(loglevel, msg, exc_info=exc_info)
-    else:
+    try:
+        from .. import _getcloud
+        roc = _getcloud().running_on_cloud()
+        if roc:
+            pilog_module = __import__('pimployee.log', fromlist=['log'])
+            pilog_module.pilogger.log(loglevel, msg, exc_info=exc_info)
+        else:
+            print >> sys.stderr, msg
+            if exc_info:
+                ei = sys.exc_info()
+                traceback.print_exception(ei[0], ei[1], ei[2], None, sys.stderr)
+    except:
         print >> sys.stderr, msg
         if exc_info:
             ei = sys.exc_info()
             traceback.print_exception(ei[0], ei[1], ei[2], None, sys.stderr)
-
 
 class CloudPickler(pickle.Pickler):
     dispatch = pickle.Pickler.dispatch.copy()
