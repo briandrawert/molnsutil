@@ -33,4 +33,4 @@ local_storage = "Local"
 persistent_storage = "Persistent"
 shared_storage = "Shared"
 reduce_input_file_name = "reduce-input-file"
-MaxJobTimeInSeconds = 3600
+MaxJobTimeInSeconds = 24 * 60 * 60
