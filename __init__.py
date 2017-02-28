@@ -340,6 +340,7 @@ class DistributedEnsemble:
             if timer_current - timer_start > constants.MaxJobTimeInSeconds:
                 self.log.write_log("Job timed out. Time out period is {0} seconds."
                                    .format(constants.MaxJobTimeInSeconds), logging.ERROR)
+
                 raise MolnsUtilException(jsonify(completed_jobs=completed_jobs,
                                                  successful_jobs=successful_jobs,
                                                  total_jobs=total_jobs,
